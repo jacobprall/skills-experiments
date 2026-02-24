@@ -1,0 +1,79 @@
+# Standard Skills Library Manifest
+# Index of all skills. Read this file to discover available skills
+# without scanning directories or parsing front-matter from every file.
+#
+# DAG rules:
+#   - Meta-Router: Single entry point (router.md). Routes to domain routers only.
+#   - Domain Routers: routes_to (type-prefixed). No depends_on.
+#   - Playbooks: depends_on (bare names, primitives only). No routes_to.
+#   - Primitives: Leaf nodes. No depends_on, no routes_to.
+#
+# Convention: paths resolve as {type}/{name}/skill.md | router.md | playbook.md
+
+entry: router.md
+
+primitives:
+  dynamic-tables:
+    domain: data-transformation
+  dbt-snowflake:
+    domain: data-transformation
+  masking-policies:
+    domain: data-security
+  row-access-policies:
+    domain: data-security
+  projection-policies:
+    domain: data-security
+  data-classification:
+    domain: data-security
+  account-usage-views:
+    domain: data-security
+  spcs-deployment:
+    domain: app-development
+  streamlit-in-snowflake:
+    domain: app-development
+  openflow:
+    domain: data-transformation
+
+routers:
+  data-security:
+    domain: data-security
+    routes_to:
+      - primitives/data-classification
+      - primitives/masking-policies
+      - primitives/row-access-policies
+      - primitives/projection-policies
+      - primitives/account-usage-views
+      - playbooks/secure-sensitive-data
+  data-transformation:
+    domain: data-transformation
+    routes_to:
+      - primitives/dynamic-tables
+      - primitives/dbt-snowflake
+      - primitives/openflow
+      - playbooks/build-streaming-pipeline
+  app-deployment:
+    domain: app-development
+    routes_to:
+      - primitives/spcs-deployment
+      - primitives/streamlit-in-snowflake
+      - playbooks/build-react-app
+
+playbooks:
+  secure-sensitive-data:
+    domain: data-security
+    depends_on:
+      - data-classification
+      - masking-policies
+      - row-access-policies
+      - projection-policies
+      - account-usage-views
+  build-streaming-pipeline:
+    domain: data-transformation
+    depends_on:
+      - dynamic-tables
+      - dbt-snowflake
+      - openflow
+  build-react-app:
+    domain: app-development
+    depends_on:
+      - spcs-deployment
