@@ -17,12 +17,18 @@ Every skill declares a `domain` in its front-matter. Valid domains:
 |--------|-------|------------------|
 | `data-transformation` | Moving and reshaping data within Snowflake | Dynamic tables, streams, tasks, materialized views |
 | `data-security` | Protecting, classifying, and auditing data access | Masking policies, row access policies, data classification, governance queries |
-| `data-integration` | Connecting external systems and ingesting data | Stages, pipes, integrations, OpenFlow, connectors |
-| `cost-operations` | Understanding and controlling Snowflake spend | Warehouse sizing, billing views, metering, resource monitors |
-| `ml-ai` | Machine learning and AI workflows on Snowflake | Model registry, batch inference, ML jobs, SPCS inference, Cortex agents |
-| `app-development` | Building and deploying applications | SPCS deployment, Streamlit in Snowflake |
-| `migration` | Moving workloads to Snowflake | SnowConvert, assessment, wave planning |
-| `semantic-modeling` | Structured data models for Cortex Analyst | Semantic views, semantic model creation, validation |
+| `app-deployment` | Building and deploying applications on Snowflake | SPCS deployment, Streamlit in Snowflake |
+| `cost-ops` | Understanding and controlling Snowflake spend | Warehouse credits, serverless costs, Cortex AI costs, budgets, anomalies |
+| `ai-analytics` | Text and document analysis using Cortex AI functions | AI_CLASSIFY, AI_EXTRACT, AI_COMPLETE, AI_SENTIMENT, document processing |
+| `data-observability` | Data quality monitoring, lineage, and impact analysis | DMFs, quality scores, upstream/downstream lineage, table comparison |
+
+Reserved for future use:
+
+| Domain | Scope |
+|--------|-------|
+| `data-integration` | External connectors, stages, pipes, ingestion beyond OpenFlow |
+| `migration` | SnowConvert, workload assessment, wave planning |
+| `semantic-modeling` | Semantic views for Cortex Analyst |
 
 ## Canonical Terms
 
@@ -38,17 +44,11 @@ Use these exact terms. Do not use synonyms.
 | compute pool | SPCS pool |
 | image repository | SPCS repo, container registry |
 | service | SPCS service, container service |
-| model registry | ML registry |
-| batch inference | batch prediction, batch scoring |
-| semantic view | semantic model (when referring to the Snowflake object) |
 | warehouse | virtual warehouse, VW |
 | target lag | refresh lag, DT lag |
-| integration | external integration |
 | stage | external stage, internal stage (qualify when needed) |
-
-## Version Conventions
-
-- Format: `"major.minor"` (string, quoted in YAML)
-- Major bump: breaking changes to structure, renamed sections, removed content
-- Minor bump: added examples, clarified constraints, new parameters documented
-- Initial version: `"1.0"`
+| AI_CLASSIFY | ai classify, classify function |
+| AI_EXTRACT | ai extract, extract function |
+| AI_COMPLETE | ai complete, complete function |
+| ACCOUNT_USAGE | account usage views |
+| credits | compute credits (unless distinguishing from token credits) |

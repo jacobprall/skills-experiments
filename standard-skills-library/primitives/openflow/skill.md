@@ -3,11 +3,6 @@ type: primitive
 name: openflow
 domain: data-transformation
 snowflake_docs: "https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # OpenFlow

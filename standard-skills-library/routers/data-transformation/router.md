@@ -2,36 +2,6 @@
 type: router
 name: data-transformation
 domain: data-transformation
-parameters:
-  - name: data_location
-    description: "Where the data currently lives"
-    options:
-      - id: already-in-snowflake
-        description: "Data is already loaded in Snowflake tables"
-      - id: external-source
-        description: "Data needs to be ingested from an external database or system"
-  - name: freshness
-    description: "How fresh the data needs to be"
-    options:
-      - id: near-real-time
-        description: "Minutes behind — continuously refreshing"
-      - id: hourly
-        description: "Updated every hour or few hours"
-      - id: daily
-        description: "Updated once a day, typically overnight"
-      - id: on-demand
-        description: "Refreshed manually or on a trigger"
-  - name: existing_tooling
-    description: "What the user already has in place"
-    options:
-      - id: none
-        description: "Starting from scratch — no existing pipeline tools"
-      - id: dbt-project
-        description: "Already using dbt for data transformations"
-      - id: nifi-connectors
-        description: "Already using NiFi or OpenFlow connectors"
-      - id: sql-only
-        description: "Comfortable with SQL, no additional tooling"
 routes_to:
   - primitives/dynamic-tables
   - primitives/dbt-snowflake

@@ -1,32 +1,24 @@
 # Extending the Router Network
 
-How to add domain routers from external repos or skill packages.
+How to add new domains to the Standard Skills Library.
 
 ## Overview
 
-The meta-router (`router.md`) is designed for extension. Adding a new domain router requires:
+Adding a new domain requires:
 
-1. Creating a router that follows the schema
-2. Registering it in the meta-router's `domains` block
-3. Adding entries to `skill-index.yaml`
+1. Creating a domain router, playbooks, and primitives
+2. Registering them in `SKILL.md` and `index.yaml`
+3. Adding the domain to the controlled vocabulary
 
 ## Quick Start
 
 ### 1. Create Your Router
-
-Your router must follow the standard schema. Minimum structure:
 
 ```markdown
 ---
 type: router
 name: {domain-name}
 domain: {domain-name}
-parameters:
-  - name: user_goal
-    description: "What the user wants to accomplish"
-    options:
-      - id: option-1
-        description: "Description for routing"
 routes_to:
   - primitives/{your-primitive}
   - playbooks/{your-playbook}
@@ -40,7 +32,6 @@ One-line description.
 
 | Input | How to Determine | Example |
 |-------|------------------|---------|
-| ... | ... | ... |
 
 ## Routing Logic
 
@@ -52,35 +43,25 @@ Start
 
 ## Routes To
 
-| Target | Mode | When Selected |
-|--------|------|---------------|
-| ... | ... | ... |
+| Target | When Selected | What It Provides |
+|--------|---------------|------------------|
 ```
 
-### 2. Register in Meta-Router
+### 2. Register in SKILL.md
 
-Add your domain to `router.md` front-matter:
+Add your domain to the routing table and keywords table in `SKILL.md`:
 
-```yaml
-domains:
-  # Existing domains...
-  
-  your-domain:
-    router: routers/your-domain        # or: external/your-repo/router
-    produces: [output-type]            # What this domain creates
-    requires: [input-type]             # What this domain needs (for chaining)
-    description: "What this domain handles"
-    context_mapping:                   # How previous phase outputs map to this domain's inputs
-      created_tables → target_scope
-    outputs:                           # Declared outputs for context handoff
-      - name: created_objects
-        type: list[string]
-        description: "Objects created by this domain"
+```markdown
+| `your-domain` | `routers/your-domain/router.md` | keyword1, keyword2, keyword3 |
 ```
 
-### 3. Update Manifest
+If the domain participates in cross-domain chaining, add it to the dependency table:
 
-Add entries to `skill-index.yaml`:
+```markdown
+| `your-domain` | what-it-produces | what-it-requires | position |
+```
+
+### 3. Update index.yaml
 
 ```yaml
 primitives:
@@ -100,170 +81,37 @@ playbooks:
     depends_on: [your-primitive]
 ```
 
-### 4. Add Keywords to Meta-Router
+### 4. Update Controlled Vocabulary
 
-Update the domain keywords table in `router.md`:
-
-```markdown
-| Domain | Keywords |
-|--------|----------|
-| `your-domain` | keyword1, keyword2, keyword3 |
-```
+Add your domain to `spec/controlled-vocabulary.md`.
 
 ## Domain Dependencies
 
-The `produces` and `requires` fields enable automatic chaining:
-
-```yaml
-domains:
-  data-transformation:
-    produces: [tables, pipelines]      # Creates these
-    requires: []                       # Needs nothing
-    
-  your-domain:
-    produces: [reports, alerts]        # Creates these
-    requires: [tables]                 # Needs tables first
-```
-
-**Chaining rules:**
-- Domains with no `requires` can start a chain
-- Domains are topologically sorted: producers before consumers
-- Context flows forward: outputs from phase N available to phase N+1
-
-### Common Dependency Patterns
+The `produces`/`requires` declarations in SKILL.md enable cross-domain chaining:
 
 | Domain Type | Typically Produces | Typically Requires |
 |-------------|-------------------|-------------------|
-| Ingestion | tables, streams | — |
-| Transformation | tables, pipelines | tables |
-| Security | policies, governance | tables |
-| Analytics | reports, dashboards | tables, policies |
-| Deployment | applications, endpoints | tables |
+| Ingestion/Transformation | tables, pipelines | — |
+| Security | policies | tables |
+| Analytics/AI | enriched tables, reports | tables |
+| Deployment | applications | tables |
+| Operations (cost, observability) | recommendations | — (standalone) |
 
-## External Router Locations
-
-Routers can live in different locations:
-
-```yaml
-domains:
-  # Local (in this repo)
-  data-security:
-    router: routers/data-security
-    
-  # Subdirectory (external package copied in)
-  ml-workflows:
-    router: external/ml-skills/routers/ml-workflows
-    
-  # Relative path (sibling repo, monorepo)
-  cost-ops:
-    router: ../cost-skills/routers/cost-operations
-```
-
-**Recommended structure for external skills:**
-
-```
-your-skills-package/
-├── routers/
-│   └── your-domain/
-│       └── router.md
-├── playbooks/
-│   └── your-playbook/
-│       └── playbook.md
-├── primitives/
-│   └── your-primitive/
-│       └── skill.md
-└── manifest-fragment.yaml    # Partial manifest for merging
-```
-
-## Manifest Fragments
-
-For external packages, provide a `manifest-fragment.yaml` that can be merged:
-
-```yaml
-# manifest-fragment.yaml
-primitives:
-  your-primitive:
-    domain: your-domain
-
-routers:
-  your-domain:
-    domain: your-domain
-    routes_to:
-      - primitives/your-primitive
-
-playbooks:
-  your-playbook:
-    domain: your-domain
-    depends_on: [your-primitive]
-```
-
-The integrator merges this into the main `skill-index.yaml`.
+**Rules:**
+- Domains with no `requires` can start a chain or run standalone
+- Domains are executed in topological order: producers before consumers
+- Some domains (cost-ops, observability) are typically standalone — they don't produce artifacts for other domains
 
 ## Validation Checklist
 
-Before registering an external router:
+Before registering a new domain:
 
-- [ ] Router follows `type: router` schema
-- [ ] All `routes_to` targets exist and are registered
-- [ ] `produces`/`requires` use consistent vocabulary across domains
+- [ ] Router follows schema (`type: router`, `routes_to`)
+- [ ] All `routes_to` targets exist and are registered in `index.yaml`
+- [ ] Primitives follow schema
+- [ ] Playbooks follow schema (including `depends_on`)
+- [ ] Domain name added to controlled vocabulary
 - [ ] Keywords don't conflict with existing domains
-- [ ] Primitives follow the primitive schema (including `tested_on`, `last_reviewed`)
-- [ ] Playbooks follow the playbook schema (including `probes`, checkpoint `severity`)
-- [ ] No circular dependencies in domain `requires` (manifest validation will catch this)
-- [ ] Context mappings reference valid output/input names
-
-## Example: Adding a Cost Operations Domain
-
-**1. Create `routers/cost-operations/router.md`:**
-
-```yaml
----
-type: router
-name: cost-operations
-domain: cost-operations
-parameters:
-  - name: user_goal
-    options:
-      - id: analyze-spend
-        description: "Understand where credits are going"
-      - id: reduce-costs
-        description: "Optimize warehouse and query costs"
-routes_to:
-  - primitives/warehouse-sizing
-  - primitives/resource-monitors
-  - playbooks/cost-optimization
----
-```
-
-**2. Register in `router.md`:**
-
-```yaml
-domains:
-  cost-operations:
-    router: routers/cost-operations
-    produces: [cost-reports, budgets]
-    requires: [tables]  # Needs data to analyze
-    description: "Understand and control Snowflake spend"
-```
-
-**3. Add keywords:**
-
-```markdown
-| `cost-operations` | cost, credits, spend, budget, warehouse sizing, optimize |
-```
-
-**4. Update `skill-index.yaml`:**
-
-```yaml
-routers:
-  cost-operations:
-    domain: cost-operations
-    routes_to:
-      - primitives/warehouse-sizing
-      - primitives/resource-monitors
-      - playbooks/cost-optimization
-```
-
-Now the meta-router can:
-- Route "analyze my Snowflake costs" → cost-operations domain
-- Chain "build pipeline and optimize costs" → [data-transformation, cost-operations]
+- [ ] SKILL.md routing table and keywords table updated
+- [ ] `index.yaml` updated with all new entries
+- [ ] No circular dependencies in domain chaining

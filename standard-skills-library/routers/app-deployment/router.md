@@ -1,26 +1,7 @@
 ---
 type: router
 name: app-deployment
-domain: app-development
-parameters:
-  - name: app_type
-    description: "What kind of application the user is building"
-    options:
-      - id: streamlit
-        description: "A Streamlit dashboard or data app"
-      - id: react-nextjs
-        description: "A React or Next.js web application"
-      - id: custom-container
-        description: "A custom application packaged as a Docker container"
-  - name: requirements
-    description: "Any special requirements beyond standard packages"
-    options:
-      - id: standard-packages-only
-        description: "Only needs standard Python/JS packages and Snowflake data access"
-      - id: custom-packages
-        description: "Needs packages not available in the standard Snowflake environment"
-      - id: external-api-access
-        description: "Needs to call external APIs or services outside Snowflake"
+domain: app-deployment
 routes_to:
   - primitives/streamlit-in-snowflake
   - primitives/spcs-deployment

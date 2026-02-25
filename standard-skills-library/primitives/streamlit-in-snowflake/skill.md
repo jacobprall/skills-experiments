@@ -3,11 +3,6 @@ type: primitive
 name: streamlit-in-snowflake
 domain: app-development
 snowflake_docs: "https://docs.snowflake.com/en/developer-guide/streamlit/about-streamlit"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # Streamlit in Snowflake

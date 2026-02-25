@@ -3,11 +3,6 @@ type: primitive
 name: row-access-policies
 domain: data-security
 snowflake_docs: "https://docs.snowflake.com/en/sql-reference/sql/create-row-access-policy"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # Row Access Policies

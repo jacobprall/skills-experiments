@@ -1,21 +1,22 @@
 # Standard Skills Library Manifest
-# Index of all skills. Read this file to discover available skills
-# without scanning directories or parsing front-matter from every file.
+# Source of truth for what exists. Agent reads this to discover skills.
 #
 # DAG rules:
-#   - Meta-Router: Single entry point (router.md). Routes to domain routers only.
+#   - SKILL.md: Single entry point. Routes to domain routers only.
 #   - Domain Routers: routes_to (type-prefixed). No depends_on.
 #   - Playbooks: depends_on (bare names, primitives only). No routes_to.
 #   - Primitives: Leaf nodes. No depends_on, no routes_to.
 #
 # Convention: paths resolve as {type}/{name}/skill.md | router.md | playbook.md
 
-entry: router.md
+entry: SKILL.md
 
 primitives:
   dynamic-tables:
     domain: data-transformation
   dbt-snowflake:
+    domain: data-transformation
+  openflow:
     domain: data-transformation
   masking-policies:
     domain: data-security
@@ -27,14 +28,37 @@ primitives:
     domain: data-security
   account-usage-views:
     domain: data-security
+  warehouse-costs:
+    domain: cost-ops
+  serverless-costs:
+    domain: cost-ops
+  cortex-ai-costs:
+    domain: cost-ops
+  ai-classify:
+    domain: ai-analytics
+  ai-extract:
+    domain: ai-analytics
+  ai-complete:
+    domain: ai-analytics
   spcs-deployment:
-    domain: app-development
+    domain: app-deployment
   streamlit-in-snowflake:
-    domain: app-development
-  openflow:
-    domain: data-transformation
+    domain: app-deployment
+  data-metric-functions:
+    domain: data-observability
+  lineage-queries:
+    domain: data-observability
+  table-comparison:
+    domain: data-observability
 
 routers:
+  data-transformation:
+    domain: data-transformation
+    routes_to:
+      - primitives/dynamic-tables
+      - primitives/dbt-snowflake
+      - primitives/openflow
+      - playbooks/build-streaming-pipeline
   data-security:
     domain: data-security
     routes_to:
@@ -44,19 +68,36 @@ routers:
       - primitives/projection-policies
       - primitives/account-usage-views
       - playbooks/secure-sensitive-data
-  data-transformation:
-    domain: data-transformation
-    routes_to:
-      - primitives/dynamic-tables
-      - primitives/dbt-snowflake
-      - primitives/openflow
-      - playbooks/build-streaming-pipeline
   app-deployment:
-    domain: app-development
+    domain: app-deployment
     routes_to:
       - primitives/spcs-deployment
       - primitives/streamlit-in-snowflake
       - playbooks/build-react-app
+  cost-ops:
+    domain: cost-ops
+    routes_to:
+      - primitives/warehouse-costs
+      - primitives/serverless-costs
+      - primitives/cortex-ai-costs
+      - playbooks/investigate-cost-spike
+      - playbooks/set-up-cost-monitoring
+  ai-analytics:
+    domain: ai-analytics
+    routes_to:
+      - primitives/ai-classify
+      - primitives/ai-extract
+      - primitives/ai-complete
+      - playbooks/enrich-text-data
+      - playbooks/analyze-documents
+  data-observability:
+    domain: data-observability
+    routes_to:
+      - primitives/data-metric-functions
+      - primitives/lineage-queries
+      - primitives/table-comparison
+      - playbooks/investigate-data-issue
+      - playbooks/assess-change-impact
 
 playbooks:
   secure-sensitive-data:
@@ -74,6 +115,39 @@ playbooks:
       - dbt-snowflake
       - openflow
   build-react-app:
-    domain: app-development
+    domain: app-deployment
     depends_on:
       - spcs-deployment
+  investigate-cost-spike:
+    domain: cost-ops
+    depends_on:
+      - warehouse-costs
+      - serverless-costs
+      - cortex-ai-costs
+  set-up-cost-monitoring:
+    domain: cost-ops
+    depends_on:
+      - warehouse-costs
+      - serverless-costs
+      - cortex-ai-costs
+  enrich-text-data:
+    domain: ai-analytics
+    depends_on:
+      - ai-classify
+      - ai-extract
+      - ai-complete
+  analyze-documents:
+    domain: ai-analytics
+    depends_on:
+      - ai-extract
+      - ai-complete
+  investigate-data-issue:
+    domain: data-observability
+    depends_on:
+      - data-metric-functions
+      - lineage-queries
+  assess-change-impact:
+    domain: data-observability
+    depends_on:
+      - lineage-queries
+      - data-metric-functions

@@ -3,11 +3,6 @@ type: primitive
 name: account-usage-views
 domain: data-security
 snowflake_docs: "https://docs.snowflake.com/en/sql-reference/account-usage"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # Account Usage Views (Governance)

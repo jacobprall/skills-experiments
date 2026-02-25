@@ -20,8 +20,9 @@ We also expand the standard library with 3 new domains ported from bundled skill
 | **Snowflake access** | Native `snowflake_sql_execute` tool | `snow sql` via bash |
 | **Library domains** | 3 (security, transformation, app) | 6 (+cost-ops, AI analytics, data observability) |
 | **Test prompts** | Clear-ish, single-intent | Ambiguous, multi-intent, messy |
-| **Test count** | 3 tiers x 2 arms = 6 | 5 tiers x 2 arms = 10 |
+| **Test count** | 3 tiers x 2 arms = 6 | 6 tiers x 2 arms = 12 |
 | **Personas** | Business users only | Business users + developers |
+| **Test design** | Clear prompts, single intent | Every test has a trap — a gap between what the user asks and what actually needs to happen |
 
 ---
 
@@ -225,12 +226,22 @@ These differences are **features, not bugs** for this experiment. We're testing 
 
 ## Test Design
 
-### Principles for Experiment 002
+### Design Principle
 
-1. **Ambiguity over specificity.** Real users don't know Snowflake terminology. Prompts should be vague, use business language, and sometimes contradict themselves.
-2. **Multi-domain by default.** Most real tasks span 2-4 domains. Single-domain tests are warm-ups, not the point.
-3. **Error-prone setups.** Pre-seed the environment with gotchas: wrong permissions, existing objects, stale data. See if the agent investigates before acting.
-4. **Both personas.** Business users (no technical vocabulary) and developers (technical but wrong assumptions about Snowflake).
+Every test has a **trap** — a gap between what the user asks for and what actually needs to happen. The trap is something a confident-but-shallow agent would get wrong. It only gets caught if the agent follows investigation patterns, checks for known anti-patterns, or composes knowledge across domains.
+
+This is the core differentiator we're testing: **does the skills architecture push the agent to go beyond the literal request and discover what actually matters?**
+
+### Dimensions Tested
+
+| # | Core Skill Tested | Domains | Complexity |
+|---|-------------------|---------|------------|
+| T1 | Routing accuracy + exploration | 1 (cost-ops) | Low |
+| T2 | Disambiguation under ambiguity | 1-2 (security / observability) | Medium |
+| T3 | Audit-before-act on broken state | 1-2 (security + observability) | Medium |
+| T4 | Multi-step chaining + function selection | 2 (ai-analytics + transformation) | Hard |
+| T5 | Error recovery + pushing back on wrong assumptions | 2-3 (observability + transformation + security) | Hard |
+| T6 | Full production-readiness audit across all domains | 4-6 (all) | Very hard |
 
 ### Environment Setup
 
@@ -238,7 +249,7 @@ Same base as experiment 001, plus additional objects for new test scenarios:
 
 ```sql
 -- Base tables (same as experiment 001)
--- RAW.CUSTOMERS (500 rows, PII columns)
+-- RAW.CUSTOMERS (500 rows, PII columns: EMAIL, SSN, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME)
 -- RAW.ORDERS (5,000 rows)
 
 -- Additional for experiment 002:
@@ -267,10 +278,6 @@ CREATE OR REPLACE TABLE RAW.SUPPORT_TICKETS (
 -- Insert ~1000 rows with realistic support ticket text
 -- (Use AI_COMPLETE to generate synthetic ticket bodies, or pre-seed)
 
--- A stage with sample PDF documents (for document processing tests)
--- CREATE STAGE RAW.DOCUMENTS;
--- Upload 3-5 sample invoices/contracts
-
 -- Pre-existing masking policy with CURRENT_ROLE() anti-pattern
 -- (Tests whether agent detects and fixes it)
 CREATE OR REPLACE MASKING POLICY RAW.LEGACY_MASK_EMAIL AS (val STRING)
@@ -280,175 +287,225 @@ CREATE OR REPLACE MASKING POLICY RAW.LEGACY_MASK_EMAIL AS (val STRING)
   END;
 -- Apply it
 ALTER TABLE RAW.CUSTOMERS MODIFY COLUMN EMAIL SET MASKING POLICY RAW.LEGACY_MASK_EMAIL;
+
+-- For T5: a naive AI enrichment pipeline where AI functions are inside a dynamic table
+-- (the expensive anti-pattern the agent should catch in T4 and T6)
+CREATE OR REPLACE DYNAMIC TABLE ANALYTICS.TICKET_ENRICHED
+  TARGET_LAG = '1 hour'
+  WAREHOUSE = SNOWFLAKE_LEARNING_WH
+AS
+  SELECT
+    ticket_id, customer_id, subject, body, priority, created_at, resolved_at,
+    AI_CLASSIFY(body, ['billing', 'technical', 'account', 'feature_request']):labels[0]::VARCHAR AS category,
+    AI_SENTIMENT(body) AS sentiment_score
+  FROM RAW.SUPPORT_TICKETS;
+-- This is the trap for T6: AI functions re-run on every refresh
 ```
 
 ---
 
 ## Test Scenarios
 
-### Test 1: Warm-Up — Cost Investigation (Single Domain, Business User)
+### Test 1: "Where's the money going?" — Routing + Exploration
 
 **Domains:** cost-ops
-**Persona:** Finance manager
-**Difficulty:** Low-moderate (single domain, but vague)
+**Persona:** Finance manager (business user, no Snowflake vocabulary)
+**Difficulty:** Low-moderate
+**Core skill tested:** Can the agent route from vague business language to the right domain and explore multiple cost dimensions without being told which ones?
 
 **Prompt:**
 > Our Snowflake bill jumped this month and my boss is asking what happened. I don't really know how Snowflake billing works. Can you figure out where the money is going and if there's anything obviously wrong?
 
-**Ground-truth checklist (8 items):**
-- [ ] Queried ACCOUNT_USAGE for overall cost breakdown by service type
-- [ ] Identified warehouse costs vs. serverless vs. storage vs. Cortex AI
+**Surface ask:** Explain why the bill is high.
+**Real work:** Multi-dimensional cost investigation across service types, users, queries, and anomalies.
+**Trap:** The biggest cost driver isn't warehouses — it's Cortex AI function costs from the `TICKET_ENRICHED` dynamic table re-running AI functions on every refresh. A keyword-routing agent goes straight to warehouse queries and misses it. The agent must start with a service-level breakdown and follow the data.
+
+**Ground-truth checklist (9 items):**
+- [ ] Queried METERING_HISTORY for overall cost breakdown by service type (not just warehouses)
+- [ ] Identified Cortex AI as a significant cost driver (not just warehouse costs)
 - [ ] Showed week-over-week or month-over-month trend
 - [ ] Identified top-spending warehouses
 - [ ] Identified top-spending users or queries
-- [ ] Checked for anomalous spikes
-- [ ] Provided actionable recommendations (resize, auto-suspend, etc.)
-- [ ] Results presented in a format a non-technical person can understand
-
-**What makes this harder than experiment 001:**
-- No mention of "warehouse", "credits", "ACCOUNT_USAGE" — pure business language
-- Requires the agent to explore multiple cost dimensions without being told which ones
-- Answer quality depends on interpreting patterns, not just running SQL
+- [ ] Checked ANOMALIES_DAILY with `IS_ANOMALY = TRUE` filter
+- [ ] Traced the Cortex AI cost back to the dynamic table running AI functions on every refresh
+- [ ] Provided actionable recommendations (including fixing the AI-in-dynamic-table anti-pattern)
+- [ ] Results presented in language a non-technical person can understand
 
 ---
 
-### Test 2: Audit & Fix — Security Remediation (Single Domain, Developer)
+### Test 2: "Make sure our data is clean" — Disambiguation
 
-**Domains:** data-security
-**Persona:** Data engineer who inherited someone else's work
-**Difficulty:** Moderate (must discover existing state, not just create from scratch)
+**Domains:** data-security and/or data-observability (ambiguous — that's the point)
+**Persona:** Business user preparing for a partner data share
+**Difficulty:** Medium
+**Core skill tested:** Can the agent recognize that the request maps to multiple domains and either ask to disambiguate or cover both?
 
 **Prompt:**
-> I inherited this SNOWFLAKE_LEARNING_DB database from someone who left. I think they set up some data masking but I'm not sure it's working right — we had an incident where an analyst saw SSNs they shouldn't have. Can you audit what's there, tell me if there are any problems, and fix whatever's broken?
+> We're about to share our customer data with a partner for a joint marketing campaign. I need to make sure the data is clean and trustworthy before we send it. Can you check everything and let me know what needs to be fixed?
 
-**Pre-seeded state:**
-- `LEGACY_MASK_EMAIL` policy using `CURRENT_ROLE()` (anti-pattern) applied to EMAIL column
-- No policies on SSN, PHONE, DATE_OF_BIRTH (the "incident" — these are unprotected)
-- CUSTOMER_NAME not masked
+**Surface ask:** "Clean and trustworthy" data.
+**Real work:** This means *both* PII protection (security — you can't share SSNs with a partner) *and* data quality (observability — are there nulls, duplicates, stale records?).
+**Trap:** A keyword-matching agent picks one domain. "Clean" sounds like data quality. "Trustworthy" could be either. But the user said "share with partners" — which absolutely demands PII masking. A good agent covers both security and quality. An excellent agent discovers the broken `LEGACY_MASK_EMAIL` policy *and* checks data freshness and completeness.
 
 **Ground-truth checklist (10 items):**
-- [ ] Discovered existing masking policies (SHOW MASKING POLICIES)
-- [ ] Discovered existing policy assignments (POLICY_REFERENCES)
-- [ ] Identified the `CURRENT_ROLE()` anti-pattern in LEGACY_MASK_EMAIL
-- [ ] Identified unprotected PII columns (SSN, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME)
-- [ ] Ran SYSTEM$CLASSIFY to systematically find PII (not just manual inspection)
-- [ ] Fixed or replaced the broken LEGACY_MASK_EMAIL policy with IS_ROLE_IN_SESSION()
-- [ ] Created masking policies for unprotected PII columns
-- [ ] Applied policies to all PII columns
-- [ ] Verified masking works (queried as restricted role)
-- [ ] Provided audit summary of what was found and what was fixed
-
-**What makes this harder than experiment 001 T1:**
-- Pre-existing broken state (not greenfield)
-- Must audit before acting — creating new policies without checking existing ones would create conflicts
-- The `CURRENT_ROLE()` anti-pattern must be detected, not just avoided
-- The "incident" framing adds urgency and context the agent must interpret
+- [ ] Recognized that "clean and trustworthy" spans both security and quality
+- [ ] Checked for PII in CUSTOMERS (SYSTEM$CLASSIFY or manual inspection)
+- [ ] Discovered existing LEGACY_MASK_EMAIL and its CURRENT_ROLE() anti-pattern
+- [ ] Identified unprotected PII columns (SSN, PHONE, DATE_OF_BIRTH)
+- [ ] Recommended or created proper masking policies for the partner share
+- [ ] Checked data quality: null counts, duplicate keys, row counts
+- [ ] Checked data freshness (when was the table last updated?)
+- [ ] Provided a clear assessment of what's safe to share vs. what isn't
+- [ ] Addressed both dimensions (security AND quality) — not just one
+- [ ] If only one dimension was addressed, asked about the other (partial credit)
 
 ---
 
-### Test 3: Cross-Domain Pipeline — Transform + Observe + Secure (Business User)
+### Test 3: "Fix what's broken" — Audit-Before-Act
 
-**Domains:** data-transformation, data-observability, data-security
-**Persona:** VP of Data who doesn't know Snowflake
-**Difficulty:** Hard (3 domains, ambiguous requirements, conflicting signals)
+**Domains:** data-security + data-observability
+**Persona:** Data engineer who inherited someone else's work
+**Difficulty:** Medium
+**Core skill tested:** Can the agent investigate existing state before taking action? Does it discover problems it wasn't explicitly told about?
 
 **Prompt:**
-> We've got customer and order data that different teams keep asking me about. I need a few things: some kind of automated summary that stays current so people stop running ad-hoc queries, a way to know if something goes wrong with the data before someone complains, and make sure the personal information is locked down. I also want to understand what depends on our customer table so I know the blast radius if we ever change it. Can you set all that up?
+> I inherited this SNOWFLAKE_LEARNING_DB database from someone who left. I know they set up some data masking and there's a dynamic table pipeline, but things seem off — an analyst reported seeing data they shouldn't, and some dashboard numbers look stale. Can you audit everything and fix what's wrong?
 
-**Ground-truth checklist (14 items):**
-- [ ] Dynamic table(s) for automated revenue/order summary
-- [ ] Appropriate TARGET_LAG set
-- [ ] Pipeline produces correct aggregated data
-- [ ] Detected existing stale ANALYTICS.STALE_SUMMARY dynamic table (pre-seeded broken one)
-- [ ] Either fixed/replaced or dropped the stale table (didn't ignore it)
-- [ ] Lineage analysis: identified downstream dependencies of RAW.CUSTOMERS
-- [ ] Impact analysis presented clearly (what would break if CUSTOMERS changes)
-- [ ] SYSTEM$CLASSIFY or manual PII identification on CUSTOMERS
-- [ ] Masking policies created with IS_ROLE_IN_SESSION()
-- [ ] Policies applied to PII columns
-- [ ] Masking verified
-- [ ] Data quality / monitoring recommendation or setup (DMFs, alerts, or at minimum explained options)
-- [ ] Discovered existing broken LEGACY_MASK_EMAIL (if not cleaned from T2 — run T3 independently)
-- [ ] Results presented as a coherent summary, not just a list of SQL outputs
+**Surface ask:** Audit and fix known issues.
+**Real work:** Discover broken masking policy (CURRENT_ROLE() anti-pattern), unprotected PII columns, and a suspended dynamic table. Explain what each issue means and fix them.
+**Trap:** The agent creates *new* masking policies without first checking what exists — causing "column already has a masking policy" errors. Or it resumes the suspended dynamic table without checking *why* it was suspended. The correct pattern is: inventory existing state → diagnose problems → propose fixes → execute → verify.
 
-**What makes this harder than experiment 001 T3:**
-- 3 domains including the new data-observability domain
-- Pre-existing broken state (stale dynamic table, broken masking policy)
-- "Blast radius" is business language for lineage/impact analysis
-- "Know if something goes wrong" is vague — agent must decide between DMFs, alerts, or monitoring
+**Pre-seeded state:**
+- `LEGACY_MASK_EMAIL` with `CURRENT_ROLE()` anti-pattern applied to EMAIL
+- No policies on SSN, PHONE, DATE_OF_BIRTH (the "incident" — unprotected PII)
+- `ANALYTICS.STALE_SUMMARY` dynamic table in SUSPENDED state
+
+**Ground-truth checklist (12 items):**
+- [ ] Inventoried existing masking policies (SHOW MASKING POLICIES) before creating new ones
+- [ ] Discovered policy assignments (POLICY_REFERENCES)
+- [ ] Identified the CURRENT_ROLE() anti-pattern in LEGACY_MASK_EMAIL
+- [ ] Identified unprotected PII columns (SSN, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME)
+- [ ] Ran SYSTEM$CLASSIFY to systematically find PII (not just manual column-name guessing)
+- [ ] Fixed or replaced LEGACY_MASK_EMAIL with IS_ROLE_IN_SESSION()
+- [ ] Created and applied masking policies for unprotected PII columns
+- [ ] Verified masking works (queried as restricted role)
+- [ ] Discovered STALE_SUMMARY is suspended
+- [ ] Investigated *why* it was suspended before blindly resuming
+- [ ] Either fixed/replaced or dropped the stale table with explanation
+- [ ] Provided a coherent audit summary of what was found and what was fixed
 
 ---
 
-### Test 4: AI-Powered Analysis — Documents + Enrichment (Developer)
+### Test 4: "Build me an AI pipeline" — Multi-Step Chaining + Function Selection
 
 **Domains:** ai-analytics, data-transformation
 **Persona:** Data engineer building a new pipeline
-**Difficulty:** Hard (new domain, multi-step, requires understanding AI function selection)
+**Difficulty:** Hard
+**Core skill tested:** Can the agent select the right AI function for each task, chain operations in the correct order, and avoid the expensive anti-pattern of putting AI functions inside dynamic tables?
 
 **Prompt:**
 > I've got about a thousand support tickets in RAW.SUPPORT_TICKETS. I need to classify them by category (billing, technical, account, feature request), extract the product mentioned in each ticket, run sentiment analysis, and build a summary table that shows ticket volume and average sentiment by category and product over time. The summary should stay up to date automatically.
 
-**Ground-truth checklist (12 items):**
-- [ ] Used AI_CLASSIFY (or AI_COMPLETE with classification prompt) on ticket body
-- [ ] Classification categories match the 4 requested (billing, technical, account, feature request)
-- [ ] Used AI_EXTRACT to pull product mentions from ticket text
-- [ ] Used AI_SENTIMENT on ticket body
-- [ ] Results stored in a usable intermediate table or view
-- [ ] Dynamic table for automated summary (volume + avg sentiment by category x product x time)
-- [ ] Appropriate TARGET_LAG for the summary
-- [ ] Summary produces correct aggregated data
-- [ ] Pipeline is end-to-end functional (raw tickets → enriched → summary)
-- [ ] AI function calls are efficient (not running on every refresh if data hasn't changed)
-- [ ] Error handling for AI function failures (null/empty results)
-- [ ] Results verified with sample data
+**Surface ask:** Build an AI enrichment pipeline with auto-updating summary.
+**Real work:** Select correct AI functions, test on sample first, batch enrich into a materialized table, build dynamic table for aggregation only.
+**Trap:** Putting AI_CLASSIFY / AI_EXTRACT / AI_SENTIMENT *inside* the dynamic table definition. This is the most expensive mistake possible — the dynamic table re-runs AI functions on every refresh on every row, burning credits continuously. The correct architecture is: materialize AI results into a regular table, then aggregate in a dynamic table. A naive agent that doesn't know this guardrail builds a pipeline that works but costs 100x what it should.
 
-**What makes this harder than anything in experiment 001:**
-- AI functions are a new domain not tested before
-- Requires selecting the right AI function for each task (classify vs. extract vs. sentiment)
-- Multi-step pipeline: enrich raw data → aggregate enriched data
-- Efficiency matters: naive implementation would re-run AI functions on unchanged data
+**Ground-truth checklist (12 items):**
+- [ ] Tested AI functions on a sample (LIMIT 5-10) before full batch
+- [ ] Used AI_CLASSIFY for category classification (not AI_COMPLETE)
+- [ ] Classification categories match the 4 requested
+- [ ] Used AI_EXTRACT for product extraction
+- [ ] Used AI_SENTIMENT or AI_CLASSIFY with sentiment labels
+- [ ] Enriched results stored in a materialized table (not a dynamic table with AI functions)
+- [ ] Dynamic table aggregates pre-enriched results (not raw data through AI functions)
+- [ ] Appropriate TARGET_LAG for the summary
+- [ ] Pipeline is end-to-end functional (raw → enriched → summary)
+- [ ] Handled null/empty AI function results
+- [ ] Combined AI columns in a single SELECT (not separate passes)
+- [ ] Verified results with sample data
 
 ---
 
-### Test 5: Full Stack Chaos — Everything (Business User, Maximally Ambiguous)
+### Test 5: "I want to change this table — what happens?" — Error Recovery + Pushing Back
 
-**Domains:** All 6 (data-security, data-transformation, app-deployment, cost-ops, ai-analytics, data-observability)
-**Persona:** New VP of Data, first week, doesn't know what exists
-**Difficulty:** Very hard (6 domains, discovery-first, vague, contradictory)
+**Domains:** data-observability, data-transformation, data-security
+**Persona:** Data engineer with wrong assumptions
+**Difficulty:** Hard
+**Core skill tested:** Can the agent detect that the user's plan is partially wrong, push back with an explanation, and propose a correct alternative?
 
 **Prompt:**
-> I just joined and I'm trying to understand what we have in SNOWFLAKE_LEARNING_DB. I need to know: what data is here and is any of it sensitive? Is anything broken or stale? What are people spending money on? I also need the support ticket data categorized and summarized somehow. And eventually I'll want a dashboard. Can you help me get a handle on all of this?
+> I need to add a column to RAW.CUSTOMERS and change the type of the PHONE column from STRING to NUMBER. What's the blast radius, and can you help me do it safely?
 
-**Ground-truth checklist (18 items):**
-- [ ] Discovery: explored schemas and tables in the database
-- [ ] Discovery: described table structures and row counts
-- [ ] Security: identified PII in CUSTOMERS (SYSTEM$CLASSIFY or manual)
-- [ ] Security: audited existing masking policies (found LEGACY_MASK_EMAIL)
-- [ ] Security: identified CURRENT_ROLE() anti-pattern
-- [ ] Security: fixed or created proper masking policies
-- [ ] Observability: identified stale ANALYTICS.STALE_SUMMARY
-- [ ] Observability: ran lineage/dependency analysis
-- [ ] Observability: provided data health assessment
-- [ ] Cost: queried cost breakdown
-- [ ] Cost: identified top cost drivers
-- [ ] Cost: provided recommendations
-- [ ] AI: classified support tickets by category
-- [ ] AI: created summary of ticket trends
-- [ ] Transform: created or fixed automated summary pipeline
-- [ ] App: created dashboard (or provided plan for one)
-- [ ] Coherent narrative: presented findings as an executive briefing, not a list of SQL outputs
-- [ ] Prioritized: addressed most critical issues first (broken security > stale data > cost > nice-to-haves)
+**Surface ask:** Impact analysis + execute a schema change.
+**Real work:** Run downstream dependency analysis, discover that PHONE has a masking policy attached (STRING-typed), and explain that changing the column type would break the policy and all downstream objects.
+**Trap:** The user's plan is partially wrong — you *cannot* ALTER COLUMN type on a column with a masking policy attached without first unsetting the policy. The agent needs to push back: "You'll need to unset the masking policy first, alter the column, create a new NUMBER-typed masking policy, and re-apply it. These downstream objects will also be affected." A naive agent either executes the ALTER and hits an error it can't recover from, or does the impact analysis but misses the masking policy conflict entirely.
 
-**What makes this the hardest test:**
-- All 6 domains in one request
-- Discovery-first: agent doesn't know what exists
-- No specific instructions — agent must decide what to do and in what order
-- Implicit prioritization: security issues should be addressed before building dashboards
-- "Eventually I'll want a dashboard" is intentionally vague — agent must decide whether to build it now or defer
+**Pre-seeded state (from T3 or fresh):**
+- Masking policy applied to PHONE column (STRING type)
+- Downstream dynamic table(s) referencing CUSTOMERS
+- LEGACY_MASK_EMAIL applied to EMAIL
+
+**Ground-truth checklist (10 items):**
+- [ ] Ran downstream impact analysis (OBJECT_DEPENDENCIES) on RAW.CUSTOMERS
+- [ ] Identified dependent objects (dynamic tables, views, etc.)
+- [ ] Assessed usage stats on dependents (how actively queried)
+- [ ] Discovered that PHONE column has a masking policy attached
+- [ ] Explained that ALTER COLUMN type will fail with a masking policy in place
+- [ ] Proposed correct sequence: unset policy → alter column → create new policy → re-apply
+- [ ] Identified that the new masking policy must be NUMBER → NUMBER (not STRING → STRING)
+- [ ] Warned about downstream breakage from the type change
+- [ ] Did NOT blindly execute the ALTER and hit an error
+- [ ] Provided a complete, ordered change plan the user can review before execution
 
 ---
 
-## Metrics (Same as Experiment 001, Plus Two)
+### Test 6: "Make it production-ready" — Capstone
+
+**Domains:** All 6 (data-security, data-transformation, app-deployment, cost-ops, ai-analytics, data-observability)
+**Persona:** Engineering manager preparing a prototype for production launch
+**Difficulty:** Very hard
+**Core skill tested:** Can the agent proactively audit across every dimension without being told exactly what to check? Does the skills architecture produce an agent that asks the right questions before declaring victory?
+
+**Prompt:**
+> We've been prototyping a support ticket analysis pipeline in SNOWFLAKE_LEARNING_DB — it categorizes tickets, runs sentiment, and there's a summary table. Leadership wants to go live with it next week. Can you make sure it's production-ready? I need to know it's secure, it won't break if upstream data changes, it's not going to blow up our bill, and we can actually trust the numbers.
+
+**Surface ask:** "Make it production-ready."
+**Real work:** Every domain contributes something the agent must proactively check:
+- **Security:** PII in ticket text (customer_id links to CUSTOMERS with PII). Is the enriched data masked? Who can access it?
+- **Observability:** No quality monitoring on the source table. No lineage documentation. What depends on what?
+- **Cost:** The `TICKET_ENRICHED` dynamic table runs AI functions on every refresh — projected cost at production scale is enormous.
+- **Transformation:** AI functions inside the dynamic table is the core anti-pattern. Must be refactored to materialize enrichment separately.
+- **AI analytics:** Are the AI function outputs accurate? Were they tested? What happens on null/empty inputs?
+- **App deployment:** If a dashboard exists, does it have proper access controls?
+**Trap:** Declaring "looks good" after surface-level checks. The production-readiness *bar* requires the agent to investigate dimensions the user didn't explicitly spell out. A keyword-matching agent checks whatever the user mentioned; a playbook-driven agent runs through a systematic audit.
+
+**Pre-seeded state:**
+- `ANALYTICS.TICKET_ENRICHED` dynamic table with AI functions in the definition (the cost anti-pattern)
+- `LEGACY_MASK_EMAIL` with CURRENT_ROLE() anti-pattern
+- `ANALYTICS.STALE_SUMMARY` suspended
+- No masking on SSN, PHONE, DATE_OF_BIRTH in CUSTOMERS
+
+**Ground-truth checklist (16 items):**
+- [ ] Discovered the AI-functions-in-dynamic-table anti-pattern in TICKET_ENRICHED
+- [ ] Explained the cost implication (AI functions re-run on every refresh)
+- [ ] Proposed refactoring: materialize enrichment → aggregate in dynamic table
+- [ ] Estimated or flagged projected cost at production scale
+- [ ] Identified PII exposure risk (customer_id in tickets links to CUSTOMERS PII)
+- [ ] Audited existing masking policies (found LEGACY_MASK_EMAIL anti-pattern)
+- [ ] Identified unprotected PII columns in CUSTOMERS
+- [ ] Recommended or created proper masking
+- [ ] Ran lineage/dependency analysis on the pipeline objects
+- [ ] Checked source table quality (nulls, freshness, row count)
+- [ ] Identified STALE_SUMMARY as a broken/orphaned object
+- [ ] Tested AI function accuracy on sample data (or flagged that it should be tested)
+- [ ] Checked or recommended access controls on any dashboard/app
+- [ ] Provided a prioritized list (security + cost fixes before nice-to-haves)
+- [ ] Presented findings as a production-readiness assessment, not just SQL output
+- [ ] Identified at least one issue the user didn't explicitly ask about
+
+---
+
+## Metrics
 
 | # | Metric | How to Capture |
 |---|--------|----------------|
@@ -456,17 +513,25 @@ ALTER TABLE RAW.CUSTOMERS MODIFY COLUMN EMAIL SET MASKING POLICY RAW.LEGACY_MASK
 | 2 | **Steps to done** | Count of tool calls + SQL executions from session transcript |
 | 3 | **Human interventions** | Count every correction, re-prompt, clarification |
 | 4 | **Outcome correctness** | % of ground-truth checklist items passed |
-| 5 | **Domain sequencing quality** (new) | Did the agent address domains in a sensible order? (security before app, discovery before action) |
-| 6 | **Error recovery** (new) | When the agent hit an error or discovered a problem, did it self-recover, ask for help, or ignore it? |
+| 5 | **Trap detection** (new) | Did the agent find the trap? (the gap between ask and reality) |
+| 6 | **Investigation depth** (new) | Did the agent investigate before acting, or act on assumptions? |
+| 7 | **Error recovery** | When the agent hit an error or discovered a problem, did it self-recover, ask for help, or ignore it? |
 
-### Scoring Domain Sequencing (Metric 5)
+### Scoring Trap Detection (Metric 5)
+
+Rate per test:
+- **Caught:** Agent proactively discovered the trap without being told (e.g., found AI-in-dynamic-table cost issue, found masking policy conflict)
+- **Partial:** Agent encountered the trap reactively (hit an error, then recovered) but didn't proactively investigate
+- **Missed:** Agent never discovered the trap — declared success without catching it
+
+### Scoring Investigation Depth (Metric 6)
 
 Rate 1-3:
-- **3 (Optimal):** Addressed security/broken state first, then built on clean foundation
-- **2 (Acceptable):** Reasonable order but some missed dependencies
-- **1 (Poor):** Built new objects on broken state, or did low-priority work before critical fixes
+- **3 (Investigated first):** Audited existing state, checked for problems, then proposed a plan
+- **2 (Mixed):** Some investigation, but also made assumptions or skipped checks
+- **1 (Acted on assumptions):** Jumped straight to execution without checking existing state
 
-### Scoring Error Recovery (Metric 6)
+### Scoring Error Recovery (Metric 7)
 
 Rate per error encountered:
 - **Self-recovered:** Agent detected the problem, diagnosed it, and fixed it without human help
@@ -492,19 +557,23 @@ Same as experiment 001. Use original bundled skills (restored from backup). Same
 ### Environment Reset Between Tests
 
 ```sql
--- Drop all dynamic tables except the pre-seeded broken one
+-- Drop all dynamic tables except pre-seeded ones (STALE_SUMMARY, TICKET_ENRICHED)
 -- Drop all masking policies except LEGACY_MASK_EMAIL
 -- Drop all Streamlit apps created during tests
 -- Verify source data intact (500 customers, 5000 orders, ~1000 support tickets)
 -- Re-apply LEGACY_MASK_EMAIL to EMAIL column if dropped
 -- Re-suspend STALE_SUMMARY if dropped and re-created
+-- Re-create TICKET_ENRICHED with AI functions in definition if dropped
 ```
 
-For tests that explicitly require discovering pre-seeded broken state (T2, T3, T5), the broken objects must be present at test start. For T1 and T4 which don't involve security audit, the broken objects can be present but are not part of the scoring.
+Pre-seeded broken objects must be present at the start of each test that scores them:
+- **LEGACY_MASK_EMAIL** (CURRENT_ROLE anti-pattern): scored in T2, T3, T5, T6
+- **STALE_SUMMARY** (suspended dynamic table): scored in T3, T6
+- **TICKET_ENRICHED** (AI functions in dynamic table): scored in T1 (as cost driver), T6 (as anti-pattern)
 
 ### Test Order
 
-Run tests in order (T1 → T5) for each arm. Clean environment between each test. The broken objects (LEGACY_MASK_EMAIL, STALE_SUMMARY) are persistent fixtures, not per-test artifacts.
+Run tests in order (T1 → T6) for each arm. Clean environment between each test. The broken objects are persistent fixtures, not per-test artifacts.
 
 ---
 
@@ -512,15 +581,17 @@ Run tests in order (T1 → T5) for each arm. Clean environment between each test
 
 ### Hypotheses
 
-**H1:** Cursor + Standard Library (Arm B) will score higher on outcome correctness for T3 and T5 (multi-domain tests) because the meta-router will actually sequence domains, unlike experiment 001 where it was bypassed.
+**H1 (Trap detection):** Arm B will catch more traps across all tests because playbooks prescribe investigation-before-action patterns and primitives include anti-pattern warnings. Arm A's keyword-matched skills don't surface these proactively.
 
-**H2:** Arm B will require fewer human interventions across all tests because playbooks prescribe investigation-before-action patterns.
+**H2 (Investigation depth):** Arm B will score higher on investigation depth (metric 6) for T2, T3, T5, and T6 because playbooks enforce audit → plan → execute → verify sequences.
 
-**H3:** Arm A will be faster on T1 and T4 (single/two-domain tests) because Cortex Code's native SQL execution is lower-latency than `snow sql` via bash.
+**H3 (Speed tradeoff):** Arm A will be faster on T1 and T4 (lower-complexity tests) because Cortex Code's native SQL execution is lower-latency than `snow sql` via bash. But Arm A's speed advantage will disappear on T5 and T6 where investigation depth matters more than execution speed.
 
-**H4:** Arm B will handle pre-existing broken state better (T2, T3, T5) because playbooks include audit/discovery steps that bundled skills don't prescribe.
+**H4 (Disambiguation):** Arm B will handle T2 better because the meta-router's ambiguity detection will recognize that "clean and trustworthy" spans two domains. Arm A will pick one skill via keyword match and miss the other.
 
-**H5:** Domain sequencing quality will be higher for Arm B because the meta-router's topological sort enforces a sensible order.
+**H5 (Pushback):** Arm B will catch the masking policy type conflict in T5 because the masking-policies primitive explicitly documents the type-matching constraint. Arm A may not surface this until it hits a runtime error.
+
+**H6 (Capstone):** T6 will produce the largest delta between arms because it requires proactive investigation across all domains — exactly what playbooks prescribe and keyword-matching doesn't.
 
 ---
 
@@ -548,16 +619,17 @@ Run tests in order (T1 → T5) for each arm. Clean environment between each test
 5. Take a snapshot of the environment state for reset
 
 ### Phase 3: Run Tests
-1. Arm A: T1 → T5 with clean-slate between each
-2. Arm B: T1 → T5 with clean-slate between each
+1. Arm A: T1 → T6 with clean-slate between each
+2. Arm B: T1 → T6 with clean-slate between each
 3. Record all sessions (screen recording + transcript export)
 
 ### Phase 4: Analysis
 1. Score all tests against ground-truth checklists
-2. Compare domain sequencing between arms
-3. Analyze error recovery patterns
-4. Write report.md with findings
-5. Compare results to experiment 001 baseline
+2. Compare trap detection rates between arms
+3. Compare investigation depth between arms
+4. Analyze error recovery patterns
+5. Write report.md with findings
+6. Compare results to experiment 001 baseline
 
 ---
 

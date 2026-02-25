@@ -3,11 +3,6 @@ type: primitive
 name: spcs-deployment
 domain: app-development
 snowflake_docs: "https://docs.snowflake.com/en/developer-guide/snowpark-container-services/overview"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # SPCS Deployment

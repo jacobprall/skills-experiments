@@ -3,11 +3,6 @@ type: primitive
 name: dynamic-tables
 domain: data-transformation
 snowflake_docs: "https://docs.snowflake.com/en/user-guide/dynamic-tables-about"
-tested_on:
-  snowflake_version: "8.23"
-  test_date: "2026-02-15"
-  test_account_type: "enterprise"
-last_reviewed: "2026-02-15"
 ---
 
 # Dynamic Tables

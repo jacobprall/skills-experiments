@@ -2,22 +2,6 @@
 type: router
 name: data-security
 domain: data-security
-parameters:
-  - name: user_goal
-    description: "What the user is trying to accomplish with data security"
-    options:
-      - id: end-to-end-protection
-        description: "Discover, protect, and monitor sensitive data — full workflow"
-      - id: discover-pii
-        description: "Find and classify sensitive data (PII, financial, health) in tables"
-      - id: mask-columns
-        description: "Hide or redact column values so unauthorized users can't see them"
-      - id: restrict-rows
-        description: "Limit which rows certain users or roles can access"
-      - id: restrict-columns
-        description: "Block specific columns from being queried by certain roles"
-      - id: audit-access
-        description: "Review who accessed what data and which policies are in place"
 routes_to:
   - primitives/data-classification
   - primitives/masking-policies
