@@ -1,0 +1,12 @@
+{
+  "remote": [
+    {
+      "source": "https://github.com/ai-ready-data/ai-ready-data-agent",
+      "ref": "main",
+      "skills": [
+        { "name": "ai-ready-data" },
+        { "name": "assess-data-cli" }
+      ]
+    }
+  ]
+}

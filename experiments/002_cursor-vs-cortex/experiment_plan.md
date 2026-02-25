@@ -241,7 +241,9 @@ This is the core differentiator we're testing: **does the skills architecture pu
 | T3 | Audit-before-act on broken state | 1-2 (security + observability) | Medium |
 | T4 | Multi-step chaining + function selection | 2 (ai-analytics + transformation) | Hard |
 | T5 | Error recovery + pushing back on wrong assumptions | 2-3 (observability + transformation + security) | Hard |
-| T6 | Full production-readiness audit across all domains | 4-6 (all) | Very hard |
+| T6 | End-to-end cross-domain build from ambiguous brief | All 6 | Very hard |
+| T7 | Cost investigation + guardrails + monitoring dashboard | cost-ops + observability + security + app | Very hard |
+| T8 | Secure migration + pipeline health audit for new team | security + transformation + observability + AI | Very hard |
 
 ### Environment Setup
 
@@ -459,49 +461,189 @@ AS
 
 ---
 
-### Test 6: "Make it production-ready" — Capstone
+### Test 6: "Build me a security incident tracker" — End-to-End Cross-Domain Build
 
-**Domains:** All 6 (data-security, data-transformation, app-deployment, cost-ops, ai-analytics, data-observability)
-**Persona:** Engineering manager preparing a prototype for production launch
+**Domains:** All 6 (data-security, ai-analytics, data-transformation, app-deployment, cost-ops, data-observability)
+**Persona:** Security team lead who needs a tool built from scratch
 **Difficulty:** Very hard
-**Core skill tested:** Can the agent proactively audit across every dimension without being told exactly what to check? Does the skills architecture produce an agent that asks the right questions before declaring victory?
+**Core skill tested:** Can the agent chain across all domains to build a complete, working solution from an ambiguous brief? This tests *construction* (not just audit) across every domain simultaneously, with deliberate ambiguity that forces the agent to make and justify architectural decisions.
 
 **Prompt:**
-> We've been prototyping a support ticket analysis pipeline in SNOWFLAKE_LEARNING_DB — it categorizes tickets, runs sentiment, and there's a summary table. Leadership wants to go live with it next week. Can you make sure it's production-ready? I need to know it's secure, it won't break if upstream data changes, it's not going to blow up our bill, and we can actually trust the numbers.
+> My team needs a way to track which support tickets are about security incidents. Build me a pipeline that identifies security-related tickets, flags any that mention customer PII, enriches them with severity scores, and gives us a live dashboard where the security team can monitor incoming issues. Only the security team should be able to see the dashboard and the underlying data.
 
-**Surface ask:** "Make it production-ready."
-**Real work:** Every domain contributes something the agent must proactively check:
-- **Security:** PII in ticket text (customer_id links to CUSTOMERS with PII). Is the enriched data masked? Who can access it?
-- **Observability:** No quality monitoring on the source table. No lineage documentation. What depends on what?
-- **Cost:** The `TICKET_ENRICHED` dynamic table runs AI functions on every refresh — projected cost at production scale is enormous.
-- **Transformation:** AI functions inside the dynamic table is the core anti-pattern. Must be refactored to materialize enrichment separately.
-- **AI analytics:** Are the AI function outputs accurate? Were they tested? What happens on null/empty inputs?
-- **App deployment:** If a dashboard exists, does it have proper access controls?
-**Trap:** Declaring "looks good" after surface-level checks. The production-readiness *bar* requires the agent to investigate dimensions the user didn't explicitly spell out. A keyword-matching agent checks whatever the user mentioned; a playbook-driven agent runs through a systematic audit.
+**Surface ask:** Build an end-to-end security incident tracking system.
+**Real work:** The agent must:
+- **AI analytics:** Use AI functions to classify security vs non-security tickets, detect PII mentions in text, score severity
+- **Transformation:** Build a pipeline: raw tickets → AI enrichment (materialized, not in a DT) → filtered/aggregated view
+- **Security:** Create role-based access so only a security team role can see the enriched data and dashboard. Consider that ticket text may contain customer PII (names, emails, account numbers mentioned in the body)
+- **App deployment:** Build a Streamlit dashboard with proper access controls
+- **Cost:** Avoid the AI-in-dynamic-table anti-pattern for enrichment
+- **Observability:** Set up monitoring or at least document the pipeline lineage
+
+**Trap:** Multiple compounding ambiguities:
+1. "Security-related" is vague — the agent must define classification criteria or ask
+2. "Flags any that mention customer PII" — could mean regex, AI_EXTRACT, or joining to CUSTOMERS table. The agent needs to decide and justify
+3. "Severity scores" is undefined — the agent must propose a scoring methodology
+4. "Only the security team" — no security team role exists. The agent must create one or explain what RBAC is needed
+5. "Live dashboard" — Streamlit is the natural choice but the agent needs to handle access controls, which requires role grants on the Streamlit app
+6. The AI-in-DT anti-pattern from T4/T6 — will the agent repeat the mistake or have the skills prevent it?
 
 **Pre-seeded state:**
-- `ANALYTICS.TICKET_ENRICHED` dynamic table with AI functions in the definition (the cost anti-pattern)
-- `LEGACY_MASK_EMAIL` with CURRENT_ROLE() anti-pattern
+- Same 3 base tables (CUSTOMERS 500, ORDERS 5000, SUPPORT_TICKETS 1000)
+- `LEGACY_MASK_EMAIL` with CURRENT_ROLE() anti-pattern on EMAIL
 - `ANALYTICS.STALE_SUMMARY` suspended
-- No masking on SSN, PHONE, DATE_OF_BIRTH in CUSTOMERS
+- `ANALYTICS.TICKET_ENRICHED` with AI functions in definition (cost bomb)
+- No security team role exists
+
+**Ground-truth checklist (18 items):**
+
+*AI & Classification (4 items):*
+- [ ] Used appropriate AI function(s) to classify security vs non-security tickets
+- [ ] Defined clear classification criteria (not just "security-related")
+- [ ] Implemented PII detection in ticket text (AI_EXTRACT, regex, or other method)
+- [ ] Proposed and implemented a severity scoring methodology
+
+*Pipeline Architecture (4 items):*
+- [ ] AI enrichment stored in a materialized table (NOT a dynamic table with AI functions)
+- [ ] Aggregation/summary layer uses dynamic table or view over materialized results
+- [ ] Pipeline is end-to-end functional (raw → enriched → filtered → dashboard-ready)
+- [ ] Tested AI outputs on sample data before full batch
+
+*Security & Access Control (4 items):*
+- [ ] Created or proposed a security team role (or explained why one is needed)
+- [ ] Applied RBAC so only the security role can access enriched data
+- [ ] Addressed PII in ticket text (masking, filtering, or access control)
+- [ ] Dashboard has access controls (Streamlit grant or role-based)
+
+*App Deployment (3 items):*
+- [ ] Created a functional Streamlit dashboard (or detailed the code for one)
+- [ ] Dashboard shows relevant metrics (security ticket volume, severity distribution, trends)
+- [ ] Dashboard is connected to the enriched/summary data
+
+*Production Awareness (3 items):*
+- [ ] Avoided or flagged the AI-in-dynamic-table cost anti-pattern
+- [ ] Noticed existing TICKET_ENRICHED and either reused, refactored, or explained why replacing
+- [ ] Provided architectural documentation or summary of what was built and why
+
+---
+
+### Test 7: "Our bill tripled — fix it and make sure it doesn't happen again" — Cost Controls + Guardrails + Dashboard
+
+**Domains:** cost-ops, data-observability, data-security, app-deployment
+**Persona:** Engineering manager who just got an angry email from finance
+**Difficulty:** Very hard
+**Core skill tested:** Can the agent investigate a cost problem, identify root causes, set up preventive guardrails, and build a monitoring solution — all from a panicked, ambiguous prompt?
+
+**Prompt:**
+> Our Snowflake bill tripled last quarter and nobody noticed until finance flagged it. I need you to figure out what's driving the cost, set up guardrails so it can't happen again, and build me a dashboard where my team can monitor spend in real time. Make sure only finance and engineering leads can see it.
+
+**Surface ask:** Investigate cost spike + set up monitoring + build dashboard.
+**Real work:** The agent must:
+- **Cost-ops:** Investigate what's driving cost — should discover TICKET_ENRICHED running AI functions on every refresh as the likely culprit, plus general warehouse usage patterns
+- **Observability:** Set up resource monitors or alerting to catch future spikes early
+- **Security:** Create roles for finance/engineering leads (they don't exist), apply access controls
+- **App deployment:** Build a Streamlit cost dashboard with proper RBAC
+- **Transformation:** If the agent finds TICKET_ENRICHED as a cost driver, should recommend the materialization refactor
+
+**Trap:** Multiple compounding issues:
+1. "Real time" is misleading — ACCOUNT_USAGE views have up to 45-minute latency, ORGANIZATION_USAGE up to 3 hours. The agent should note this limitation rather than promising real-time
+2. "Finance and engineering leads" — no such roles exist. The agent must create them or explain what's needed
+3. TICKET_ENRICHED is actively burning AI credits on every refresh — this is the biggest cost driver but requires inspecting DT definitions, not just warehouse usage
+4. Resource monitors alone aren't enough — they can suspend warehouses but can't control serverless/AI costs
+5. The agent needs to distinguish between warehouse compute costs and AI/serverless costs (different monitoring approaches)
+
+**Pre-seeded state:**
+- Same 3 base tables (CUSTOMERS 500, ORDERS 5000, SUPPORT_TICKETS 1000)
+- `LEGACY_MASK_EMAIL` with CURRENT_ROLE() anti-pattern on EMAIL
+- `ANALYTICS.STALE_SUMMARY` suspended
+- `ANALYTICS.TICKET_ENRICHED` with AI functions in definition (active cost bomb)
+- No finance or engineering lead roles exist
 
 **Ground-truth checklist (16 items):**
-- [ ] Discovered the AI-functions-in-dynamic-table anti-pattern in TICKET_ENRICHED
-- [ ] Explained the cost implication (AI functions re-run on every refresh)
-- [ ] Proposed refactoring: materialize enrichment → aggregate in dynamic table
-- [ ] Estimated or flagged projected cost at production scale
-- [ ] Identified PII exposure risk (customer_id in tickets links to CUSTOMERS PII)
-- [ ] Audited existing masking policies (found LEGACY_MASK_EMAIL anti-pattern)
-- [ ] Identified unprotected PII columns in CUSTOMERS
-- [ ] Recommended or created proper masking
-- [ ] Ran lineage/dependency analysis on the pipeline objects
-- [ ] Checked source table quality (nulls, freshness, row count)
-- [ ] Identified STALE_SUMMARY as a broken/orphaned object
-- [ ] Tested AI function accuracy on sample data (or flagged that it should be tested)
-- [ ] Checked or recommended access controls on any dashboard/app
-- [ ] Provided a prioritized list (security + cost fixes before nice-to-haves)
-- [ ] Presented findings as a production-readiness assessment, not just SQL output
-- [ ] Identified at least one issue the user didn't explicitly ask about
+
+*Cost Investigation (4 items):*
+- [ ] Queried ACCOUNT_USAGE views to investigate cost drivers (warehouse, serverless, AI services)
+- [ ] Identified TICKET_ENRICHED as a cost concern (AI functions in DT definition)
+- [ ] Explained the cost mechanism (AI functions re-run per-row on every refresh)
+- [ ] Distinguished between warehouse compute costs and AI/serverless costs
+
+*Guardrails & Monitoring (4 items):*
+- [ ] Created or proposed resource monitors on warehouses
+- [ ] Addressed AI/serverless cost monitoring (resource monitors don't cover these)
+- [ ] Noted ACCOUNT_USAGE latency limitation (not truly "real time")
+- [ ] Set up or proposed alerting for cost anomalies
+
+*Access Control (4 items):*
+- [ ] Created or proposed finance and engineering lead roles
+- [ ] Applied RBAC to cost data / dashboard
+- [ ] Considered what cost data each role should see (finance = billing, eng leads = warehouse detail)
+- [ ] Dashboard has access controls (Streamlit grant or role-based)
+
+*Dashboard & Delivery (4 items):*
+- [ ] Created a functional Streamlit cost dashboard (or detailed the code)
+- [ ] Dashboard shows relevant cost metrics (warehouse spend, AI spend, trends, top consumers)
+- [ ] Dashboard is connected to ACCOUNT_USAGE or equivalent data
+- [ ] Provided a summary of what was built, what it monitors, and known limitations
+
+---
+
+### Test 8: "Set up a secure analytics environment for the new team" — Secure Migration + Pipeline Health
+
+**Domains:** data-security, data-transformation, data-observability, ai-analytics
+**Persona:** Data platform lead onboarding a new analytics team
+**Difficulty:** Very hard
+**Core skill tested:** Can the agent audit an existing pipeline for health issues, secure it for a new audience, and set up a clean access layer — all while handling the tension between "give them access" and "protect sensitive data"?
+
+**Prompt:**
+> We're onboarding a new analytics team that needs access to our support ticket data, but they shouldn't see any customer PII. Can you set up a clean, secure analytics environment for them — give them the enriched ticket data, a way to explore trends, and make sure nothing sensitive leaks? Also check if the current pipeline is healthy before we hand it off.
+
+**Surface ask:** Set up secure access for a new team + health check.
+**Real work:** The agent must:
+- **Security:** PII exists in two places — CUSTOMERS table (SSN, PHONE, etc.) and potentially in ticket BODY text (customers may include names, emails, account numbers in their messages). Must address both vectors.
+- **Transformation:** Create a clean view or table that strips/masks PII for the analytics team
+- **Observability:** "Check if healthy" means auditing all 3 traps — STALE_SUMMARY suspended, TICKET_ENRICHED with AI cost bomb, LEGACY_MASK_EMAIL with CURRENT_ROLE() anti-pattern
+- **AI analytics:** The enriched data from TICKET_ENRICHED uses AI functions — are the outputs trustworthy? Were they validated?
+
+**Trap:** Multiple layers of PII exposure:
+1. Direct PII in CUSTOMERS (SSN, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME, EMAIL) — obvious
+2. PII in ticket BODY text — customers write things like "my email is X" or "account #12345" in support tickets. The agent needs to recognize this as a PII vector, not just mask the CUSTOMERS table
+3. CUSTOMER_ID in TICKET_ENRICHED is a join key to CUSTOMERS — even without direct PII columns, the analytics team could join to get PII unless access is controlled
+4. "Clean environment" is ambiguous — new schema? Secure views? Role with grants? The agent must make an architectural decision
+5. "Healthy" requires discovering all 3 traps, not just running a SELECT to check row counts
+6. No analytics team role exists — must be created
+
+**Pre-seeded state:**
+- Same 3 base tables (CUSTOMERS 500, ORDERS 5000, SUPPORT_TICKETS 1000)
+- `LEGACY_MASK_EMAIL` with CURRENT_ROLE() anti-pattern on EMAIL
+- `ANALYTICS.STALE_SUMMARY` suspended
+- `ANALYTICS.TICKET_ENRICHED` with AI functions in definition (cost bomb)
+- No analytics team role exists
+
+**Ground-truth checklist (16 items):**
+
+*Security & PII (5 items):*
+- [ ] Identified direct PII columns in CUSTOMERS (SSN, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME, EMAIL)
+- [ ] Recognized PII risk in ticket BODY text (customers may include personal info in messages)
+- [ ] Addressed the CUSTOMER_ID join-key risk (analytics team could join to CUSTOMERS)
+- [ ] Created or proposed an analytics team role with restricted access
+- [ ] Applied masking policies or created secure views that strip PII
+
+*Pipeline Health Audit (4 items):*
+- [ ] Discovered STALE_SUMMARY is suspended and investigated why
+- [ ] Discovered TICKET_ENRICHED has AI functions in its definition (cost anti-pattern)
+- [ ] Audited LEGACY_MASK_EMAIL and found the CURRENT_ROLE() anti-pattern
+- [ ] Provided a health assessment before granting access (not just "looks fine")
+
+*Analytics Environment Setup (4 items):*
+- [ ] Created a clean access layer (secure views, new schema, or filtered tables)
+- [ ] Analytics team can query enriched ticket data without seeing PII
+- [ ] Provided a way to explore trends (view, dashboard, or documented query patterns)
+- [ ] Access is properly scoped (analytics role can only see what they need)
+
+*Production Awareness (3 items):*
+- [ ] Flagged the AI-in-DT cost issue as something to fix before onboarding
+- [ ] Recommended or executed fixes for discovered health issues
+- [ ] Provided documentation of what was set up and what access was granted
 
 ---
 

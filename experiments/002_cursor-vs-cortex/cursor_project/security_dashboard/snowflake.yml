@@ -1,0 +1,12 @@
+definition_version: "2"
+entities:
+  security_dashboard:
+    type: streamlit
+    identifier:
+      name: SECURITY_TICKET_DASHBOARD
+    title: "Security Incident Monitor"
+    main_file: app.py
+    stage: SECURITY_DASHBOARD_STAGE
+    query_warehouse: SNOWFLAKE_LEARNING_WH
+    artifacts:
+      - app.py

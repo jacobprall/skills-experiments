@@ -121,7 +121,8 @@ def parse_transcript(filepath: str, arm: str = "unknown", test: str = "unknown")
 
     for obj in lines:
         role = obj.get("role", "unknown")
-        content = obj.get("message", {}).get("content", [])
+        # Support both formats: top-level "content" (Cortex export) and nested "message.content"
+        content = obj.get("content") or obj.get("message", {}).get("content", [])
 
         if isinstance(content, list):
             text = " ".join(c.get("text", "") for c in content if isinstance(c, dict))

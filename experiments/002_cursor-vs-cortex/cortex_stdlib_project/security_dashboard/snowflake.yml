@@ -1,0 +1,14 @@
+definition_version: "2"
+entities:
+  security_dashboard:
+    type: streamlit
+    identifier:
+      name: SECURITY_INCIDENT_MONITOR
+      schema: SECURITY_DASHBOARD
+      database: SNOWFLAKE_LEARNING_DB
+    title: "Security Incident Monitor"
+    main_file: app.py
+    query_warehouse: SNOWFLAKE_LEARNING_WH
+    stage: SNOWFLAKE_LEARNING_DB.SECURITY_DASHBOARD.STREAMLIT_STAGE
+    artifacts:
+      - app.py

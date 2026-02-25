@@ -44,8 +44,8 @@ snow sql -f path/to/file.sql --database SNOWFLAKE_LEARNING_DB
 Use `--role` to test under a different role (critical for verifying masking policies):
 
 ```bash
-snow sql -q "SELECT email, ssn FROM RAW.CUSTOMERS LIMIT 3" --role SNOWFLAKE_LEARNING_ROLE --database SNOWFLAKE_LEARNING_DB
-snow sql -q "SELECT email, ssn FROM RAW.CUSTOMERS LIMIT 3" --role SNOWFLAKE_LEARNING_ADMIN_ROLE --database SNOWFLAKE_LEARNING_DB
+snow sql -q "SELECT email, ssn FROM RAW_CURSOR.CUSTOMERS LIMIT 3" --role SNOWFLAKE_LEARNING_ROLE --database SNOWFLAKE_LEARNING_DB
+snow sql -q "SELECT email, ssn FROM RAW_CURSOR.CUSTOMERS LIMIT 3" --role SNOWFLAKE_LEARNING_ADMIN_ROLE --database SNOWFLAKE_LEARNING_DB
 ```
 
 ### Object Discovery
@@ -53,18 +53,18 @@ snow sql -q "SELECT email, ssn FROM RAW.CUSTOMERS LIMIT 3" --role SNOWFLAKE_LEAR
 List and describe Snowflake objects without writing SQL:
 
 ```bash
-snow object list table --database SNOWFLAKE_LEARNING_DB --schema RAW
-snow object list dynamic-table --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS
-snow object list masking-policy --database SNOWFLAKE_LEARNING_DB --schema RAW
-snow object describe table SNOWFLAKE_LEARNING_DB.RAW.CUSTOMERS
+snow object list table --database SNOWFLAKE_LEARNING_DB --schema RAW_CURSOR
+snow object list dynamic-table --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS_CURSOR
+snow object list masking-policy --database SNOWFLAKE_LEARNING_DB --schema RAW_CURSOR
+snow object describe table SNOWFLAKE_LEARNING_DB.RAW_CURSOR.CUSTOMERS
 ```
 
 ### Streamlit Apps
 
 ```bash
 snow streamlit list --database SNOWFLAKE_LEARNING_DB
-snow streamlit deploy --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS
-snow streamlit get-url APP_NAME --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS
+snow streamlit deploy --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS_CURSOR
+snow streamlit get-url APP_NAME --database SNOWFLAKE_LEARNING_DB --schema ANALYTICS_CURSOR
 ```
 
 ### Verify Connectivity
@@ -78,7 +78,7 @@ snow sql -q "SELECT CURRENT_ACCOUNT(), CURRENT_ROLE(), CURRENT_WAREHOUSE()" --da
 ## Environment
 
 - **Database:** SNOWFLAKE_LEARNING_DB
-- **Schemas:** RAW, STAGING, ANALYTICS, GOVERNANCE
+- **Schemas:** RAW_CURSOR, STAGING, ANALYTICS_CURSOR, GOVERNANCE
 - **Admin role:** SNOWFLAKE_LEARNING_ADMIN_ROLE
 - **Restricted role:** SNOWFLAKE_LEARNING_ROLE
 - **Warehouse:** SNOWFLAKE_LEARNING_WH
