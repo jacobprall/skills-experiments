@@ -9,7 +9,9 @@
 **Format:** Side-by-side video comparison. Same prompts, same account, same data. Each arm runs all three tests sequentially in a single recording session.
 
 **Database:** `SNOWFLAKE_LEARNING_DB`
-**Role:** `SNOWFLAKE_LEARNING_ADMIN`
+**Role:** `SNOWFLAKE_LEARNING_ADMIN_ROLE`
+**Warehouse:** `SNOWFLAKE_LEARNING_WH`
+**Restricted role (for masking verification):** `SNOWFLAKE_LEARNING_ROLE`
 
 ---
 
@@ -106,7 +108,7 @@ FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY(
     DATE_RANGE_END => '<test_end_timestamp>'::TIMESTAMP_LTZ,
     RESULT_LIMIT => 1000
 ))
-WHERE warehouse_name = 'BENCHMARK_WH'
+WHERE warehouse_name = 'SNOWFLAKE_LEARNING_WH'
 ORDER BY start_time;
 ```
 
@@ -132,22 +134,46 @@ The standard library thread model is strictly better for auditability — that's
 
 ### Prerequisites
 
-- Snowflake account with `SNOWFLAKE_LEARNING_ADMIN` role access
+- Snowflake account with `SNOWFLAKE_LEARNING_ADMIN_ROLE` access
 - Cortex Code CLI v1.0.20 installed
 - Screen recording software (OBS or similar) with timer overlay
 - The orchestration script (`run_benchmark.sh`) on the Desktop
 
+### Skill Swap Workaround (Arm B)
+
+**Discovery:** Cortex Code's available skills list is **dual-sourced**. The `<available_skills>` block in the system prompt is partially hardcoded by the Cortex Code binary/server — it always advertises the original bundled skill names (e.g., `sensitive-data-classification`, `data-policy`, `dynamic-tables`) regardless of what's on disk. The `bundled_skills/` directory only provides the **content** that gets loaded when a skill is invoked.
+
+**Failed approach:** Initially we tried replacing the entire `bundled_skills/` directory with 4 new SKILL.md wrappers (`data-security`, `data-transformation`, `app-deployment`, `standard-router`). The agent still tried to invoke the hardcoded skill names (e.g., `sensitive-data-classification`), which succeeded because Cortex Code found the SKILL.md file on disk — but loaded the wrong skill's content since our directory names didn't match.
+
+**Working approach (content replacement):** We restore the original `bundled_skills/` directory structure (preserving all 23 directory names) but replace the SKILL.md **content** inside each test-relevant directory with our standard library material. The agent invokes `sensitive-data-classification` by name (because the registry tells it to), but loads our standard library data-security content.
+
+**Mapping:**
+
+| Bundled Skill Name (preserved) | Standard Library Content Loaded | Domain |
+|---|---|---|
+| `sensitive-data-classification` | data-security (561 lines) | Security |
+| `data-policy` | data-security (561 lines) | Security |
+| `data-governance` | data-security (561 lines) | Security |
+| `dynamic-tables` | data-transformation (334 lines) | Transform |
+| `dbt-projects-on-snowflake` | data-transformation (334 lines) | Transform |
+| `openflow` | data-transformation (334 lines) | Transform |
+| `developing-with-streamlit` | app-deployment (306 lines) | App |
+| `deploy-to-spcs` | app-deployment (306 lines) | App |
+| `build-react-app` | app-deployment (306 lines) | App |
+
+The 13 unrelated skills (cortex-agent, iceberg, machine-learning, etc.) retain their original bundled content. They won't be triggered by our test prompts.
+
+Sub-skill directories within each replaced skill were also removed so the agent only sees our standard library SKILL.md — no residual bundled sub-content.
+
+**Implication for the benchmark:** The agent still uses the bundled skill *descriptions* (from the hardcoded registry) to decide which skill to invoke. This means the skill-selection behavior is identical between arms — only the content loaded after selection differs. This is actually a cleaner comparison: same trigger → different guidance.
+
+**Version gotcha:** Cortex Code may auto-update or use a different installed version than expected. The skill swap must be applied to ALL installed versions under `~/.local/share/cortex/`. We discovered this when the B1 session launched on v1.0.21 while we'd only patched v1.0.20. Both `1.0.20+045458.1785e665caa4` and `1.0.21+235436.342efc1ea864` have been patched with backups.
+
 ### Data Setup
 
 ```sql
-USE ROLE SNOWFLAKE_LEARNING_ADMIN;
-
-CREATE WAREHOUSE IF NOT EXISTS BENCHMARK_WH
-    WAREHOUSE_SIZE = 'XSMALL'
-    AUTO_SUSPEND = 60
-    AUTO_RESUME = TRUE;
-
-USE WAREHOUSE BENCHMARK_WH;
+USE ROLE SNOWFLAKE_LEARNING_ADMIN_ROLE;
+USE WAREHOUSE SNOWFLAKE_LEARNING_WH;
 
 CREATE DATABASE IF NOT EXISTS SNOWFLAKE_LEARNING_DB;
 CREATE SCHEMA IF NOT EXISTS SNOWFLAKE_LEARNING_DB.RAW;
@@ -206,22 +232,9 @@ SELECT
     END
 FROM TABLE(GENERATOR(ROWCOUNT => 5000));
 
--- Roles for policy verification
-CREATE ROLE IF NOT EXISTS ANALYST_RESTRICTED;
-CREATE ROLE IF NOT EXISTS DATA_STEWARD;
-
-GRANT USAGE ON DATABASE SNOWFLAKE_LEARNING_DB TO ROLE ANALYST_RESTRICTED;
-GRANT USAGE ON ALL SCHEMAS IN DATABASE SNOWFLAKE_LEARNING_DB TO ROLE ANALYST_RESTRICTED;
-GRANT SELECT ON ALL TABLES IN SCHEMA SNOWFLAKE_LEARNING_DB.RAW TO ROLE ANALYST_RESTRICTED;
-GRANT USAGE ON WAREHOUSE BENCHMARK_WH TO ROLE ANALYST_RESTRICTED;
-
-GRANT USAGE ON DATABASE SNOWFLAKE_LEARNING_DB TO ROLE DATA_STEWARD;
-GRANT USAGE ON ALL SCHEMAS IN DATABASE SNOWFLAKE_LEARNING_DB TO ROLE DATA_STEWARD;
-GRANT SELECT ON ALL TABLES IN SCHEMA SNOWFLAKE_LEARNING_DB.RAW TO ROLE DATA_STEWARD;
-GRANT USAGE ON WAREHOUSE BENCHMARK_WH TO ROLE DATA_STEWARD;
-
-GRANT ROLE ANALYST_RESTRICTED TO ROLE SNOWFLAKE_LEARNING_ADMIN;
-GRANT ROLE DATA_STEWARD TO ROLE SNOWFLAKE_LEARNING_ADMIN;
+-- Roles for masking verification (pre-existing on the account):
+-- SNOWFLAKE_LEARNING_ROLE = restricted role (should see masked values)
+-- SNOWFLAKE_LEARNING_ADMIN_ROLE = admin role (should see real values)
 ```
 
 ---
@@ -231,7 +244,7 @@ GRANT ROLE DATA_STEWARD TO ROLE SNOWFLAKE_LEARNING_ADMIN;
 **Persona:** Compliance analyst
 **Prompt:**
 
-> I have customer data in SNOWFLAKE_LEARNING_DB.RAW.CUSTOMERS that probably contains PII. I need to find the sensitive columns, mask them so only authorized roles can see the real values, and verify the masking is working. I'm using the SNOWFLAKE_LEARNING_ADMIN role. Can you help me set that up?
+> I have customer data in SNOWFLAKE_LEARNING_DB.RAW.CUSTOMERS that probably contains PII. I need to find the sensitive columns, mask them so only authorized roles can see the real values, and verify the masking is working. I'm using the SNOWFLAKE_LEARNING_ADMIN_ROLE role and the SNOWFLAKE_LEARNING_WH warehouse. Can you help me set that up?
 
 ### Expected Ground-Truth Checklist
 
@@ -239,8 +252,8 @@ GRANT ROLE DATA_STEWARD TO ROLE SNOWFLAKE_LEARNING_ADMIN;
 - [ ] Sensitive columns identified (email, phone, ssn, date_of_birth, customer_name)
 - [ ] Masking policies created using `IS_ROLE_IN_SESSION()` (not `CURRENT_ROLE()`)
 - [ ] Policies applied to identified columns
-- [ ] Verification: masked values when queried as `ANALYST_RESTRICTED`
-- [ ] Verification: real values when queried as `DATA_STEWARD`
+- [ ] Verification: masked values when queried as `SNOWFLAKE_LEARNING_ROLE`
+- [ ] Verification: real values when queried as `SNOWFLAKE_LEARNING_ADMIN_ROLE`
 
 **Outcome correctness** = (items passed / 6) × 100%
 
@@ -280,7 +293,7 @@ USE ROLE SNOWFLAKE_LEARNING_ADMIN;
 **Persona:** Business operations manager
 **Prompt:**
 
-> I need to build a pipeline that continuously transforms our raw order data in SNOWFLAKE_LEARNING_DB.RAW.ORDERS into a daily revenue summary by customer segment. The summary should refresh every 30 minutes. Also, the source CUSTOMERS table has PII that needs to be masked before anyone queries the enriched data. I'm using the SNOWFLAKE_LEARNING_ADMIN role and the BENCHMARK_WH warehouse. Can you set this up end to end?
+> I need to build a pipeline that continuously transforms our raw order data in SNOWFLAKE_LEARNING_DB.RAW.ORDERS into a daily revenue summary by customer segment. The summary should refresh every 30 minutes. Also, the source CUSTOMERS table has PII that needs to be masked before anyone queries the enriched data. I'm using the SNOWFLAKE_LEARNING_ADMIN_ROLE role and the SNOWFLAKE_LEARNING_WH warehouse. Can you set this up end to end?
 
 ### Expected Ground-Truth Checklist
 
@@ -317,9 +330,9 @@ ORDER BY name;
 SELECT * FROM SNOWFLAKE_LEARNING_DB.ANALYTICS.ORDER_SUMMARY LIMIT 10;
 
 -- Verify masking (same as Test 1)
-USE ROLE ANALYST_RESTRICTED;
+USE ROLE SNOWFLAKE_LEARNING_ROLE;
 SELECT email, phone, ssn FROM SNOWFLAKE_LEARNING_DB.RAW.CUSTOMERS LIMIT 3;
-USE ROLE SNOWFLAKE_LEARNING_ADMIN;
+USE ROLE SNOWFLAKE_LEARNING_ADMIN_ROLE;
 ```
 
 ---
@@ -329,7 +342,7 @@ USE ROLE SNOWFLAKE_LEARNING_ADMIN;
 **Persona:** VP of Operations
 **Prompt:**
 
-> Here's what I need: take our raw orders and customer data in SNOWFLAKE_LEARNING_DB, build a continuously refreshing pipeline that produces a daily revenue summary by customer segment, make sure all customer PII is masked so only the DATA_STEWARD role can see real values, and then build me a React dashboard that shows the revenue trends with charts by segment and a summary table. I'm using the SNOWFLAKE_LEARNING_ADMIN role and BENCHMARK_WH warehouse. End to end.
+> I've got raw orders and customer data in SNOWFLAKE_LEARNING_DB. I need three things: a pipeline that keeps a daily revenue-by-segment summary up to date automatically, the customer PII locked down so only authorized people see real values, and a React dashboard that shows the revenue trends with charts. Can you build the whole thing?
 
 ### Expected Ground-Truth Checklist
 
@@ -400,8 +413,8 @@ After both arms:
 ### Clean Slate Between Tests
 
 ```sql
-USE ROLE SNOWFLAKE_LEARNING_ADMIN;
-USE WAREHOUSE BENCHMARK_WH;
+USE ROLE SNOWFLAKE_LEARNING_ADMIN_ROLE;
+USE WAREHOUSE SNOWFLAKE_LEARNING_WH;
 
 -- Drop dynamic tables
 DROP DYNAMIC TABLE IF EXISTS SNOWFLAKE_LEARNING_DB.ANALYTICS.ORDER_SUMMARY;
@@ -474,4 +487,4 @@ The Standard Library should win on:
 
 Bundled skills may win on:
 1. **Depth for edge cases** — 4,722 lines for dynamic-tables alone vs. ~180 in the standard library primitive means more documented edge cases
-2. **Familiarity** — the agent has been trained/tuned against bundled skill formats; standard library format is novel
+2. **Familiarity** — the agent has been trained/tuned against

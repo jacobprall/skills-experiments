@@ -20,10 +20,10 @@ CORTEX_VERSION="1.0.20+045458.1785e665caa4"
 CORTEX_BASE="$HOME/.local/share/cortex/${CORTEX_VERSION}"
 BUNDLED_DIR="${CORTEX_BASE}/bundled_skills"
 BUNDLED_BACKUP="${CORTEX_BASE}/bundled_skills.bak"
-STANDARD_LIB="$HOME/Desktop/snowflake-standard-skills-library"
+STANDARD_LIB="$HOME/Desktop/skills_benchmark/snowflake-standard-skills-library"
 SNOWFLAKE_CONN="snowhouse"
-ROLE="SNOWFLAKE_LEARNING_ADMIN"
-WAREHOUSE="BENCHMARK_WH"
+ROLE="SNOWFLAKE_LEARNING_ADMIN_ROLE"
+WAREHOUSE="SNOWFLAKE_LEARNING_WH"
 DATABASE="SNOWFLAKE_LEARNING_DB"
 
 # --- Helpers -----------------------------------------------------------------
@@ -39,7 +39,7 @@ run_sql() {
     local description="$1"
     local sql="$2"
     log "Running: ${description}"
-    cortex sql --connection "${SNOWFLAKE_CONN}" -q "${sql}" 2>&1 || true
+    snow sql -q "${sql}" --connection "${SNOWFLAKE_CONN}" --role "${ROLE}" --warehouse "${WAREHOUSE}" 2>&1 || true
 }
 
 # --- Commands ----------------------------------------------------------------
@@ -104,21 +104,6 @@ cmd_setup_data() {
              CASE UNIFORM(1,5,RANDOM()) WHEN 1 THEN 'PENDING' WHEN 2 THEN 'SHIPPED' WHEN 3 THEN 'DELIVERED' WHEN 4 THEN 'RETURNED' ELSE 'CANCELLED' END
          FROM TABLE(GENERATOR(ROWCOUNT => 5000));"
 
-    run_sql "Create test roles" \
-        "USE ROLE ${ROLE};
-         CREATE ROLE IF NOT EXISTS ANALYST_RESTRICTED;
-         CREATE ROLE IF NOT EXISTS DATA_STEWARD;
-         GRANT USAGE ON DATABASE ${DATABASE} TO ROLE ANALYST_RESTRICTED;
-         GRANT USAGE ON ALL SCHEMAS IN DATABASE ${DATABASE} TO ROLE ANALYST_RESTRICTED;
-         GRANT SELECT ON ALL TABLES IN SCHEMA ${DATABASE}.RAW TO ROLE ANALYST_RESTRICTED;
-         GRANT USAGE ON WAREHOUSE ${WAREHOUSE} TO ROLE ANALYST_RESTRICTED;
-         GRANT USAGE ON DATABASE ${DATABASE} TO ROLE DATA_STEWARD;
-         GRANT USAGE ON ALL SCHEMAS IN DATABASE ${DATABASE} TO ROLE DATA_STEWARD;
-         GRANT SELECT ON ALL TABLES IN SCHEMA ${DATABASE}.RAW TO ROLE DATA_STEWARD;
-         GRANT USAGE ON WAREHOUSE ${WAREHOUSE} TO ROLE DATA_STEWARD;
-         GRANT ROLE ANALYST_RESTRICTED TO ROLE ${ROLE};
-         GRANT ROLE DATA_STEWARD TO ROLE ${ROLE};"
-
     run_sql "Verify data" \
         "USE ROLE ${ROLE};
          USE WAREHOUSE ${WAREHOUSE};
@@ -127,6 +112,10 @@ cmd_setup_data() {
          SELECT 'ORDERS', COUNT(*) FROM ${DATABASE}.RAW.ORDERS;"
 
     log "Data setup complete."
+    log ""
+    log "NOTE: Test roles for masking verification:"
+    log "  Restricted (should see masked):  SNOWFLAKE_LEARNING_ROLE"
+    log "  Admin (should see real values):  SNOWFLAKE_LEARNING_ADMIN_ROLE"
 }
 
 cmd_setup_bundled() {
@@ -184,28 +173,35 @@ cmd_setup_standard() {
         rm -rf "${BUNDLED_DIR}"
     fi
 
-    # Create a bundled_skills directory that contains the standard library content
-    # We structure it so the agent discovers the standard library files
-    log "Linking standard library into bundled_skills path..."
+    # Create bundled_skills directory with SKILL.md wrappers that Cortex Code can discover.
+    # Cortex Code finds skills by scanning subdirectories of bundled_skills/ for SKILL.md
+    # files (uppercase) with name + description YAML frontmatter.
+    log "Installing standard library SKILL.md wrappers into bundled_skills path..."
     mkdir -p "${BUNDLED_DIR}"
 
-    # Copy the standard library into the bundled skills directory
-    # The agent reads from bundled_skills/, so we place the library there
-    cp -R "${STANDARD_LIB}/router.md" "${BUNDLED_DIR}/"
-    cp -R "${STANDARD_LIB}/routers" "${BUNDLED_DIR}/" 2>/dev/null || true
-    cp -R "${STANDARD_LIB}/playbooks" "${BUNDLED_DIR}/" 2>/dev/null || true
-    cp -R "${STANDARD_LIB}/primitives" "${BUNDLED_DIR}/" 2>/dev/null || true
+    # The bundled/ directory contains SKILL.md wrappers for each domain.
+    # Each wrapper has the correct frontmatter format and includes the full
+    # standard library content so the agent has all reference material.
+    local BUNDLED_WRAPPERS="${STANDARD_LIB}/bundled"
+    if [[ ! -d "${BUNDLED_WRAPPERS}" ]]; then
+        err "SKILL.md wrappers not found at ${BUNDLED_WRAPPERS}. Run the wrapper generator first."
+    fi
 
-    # Create a minimal __init__.py so the directory is recognized
-    echo "# Standard Skills Library" > "${BUNDLED_DIR}/__init__.py"
+    # Copy each domain wrapper directory (contains SKILL.md with correct format)
+    for domain_dir in "${BUNDLED_WRAPPERS}"/*/; do
+        local domain_name
+        domain_name=$(basename "${domain_dir}")
+        cp -R "${domain_dir}" "${BUNDLED_DIR}/${domain_name}"
+        log "  Installed: ${domain_name}/SKILL.md"
+    done
 
-    # Verify
+    # Verify — count SKILL.md files (uppercase) which is what Cortex Code discovers
     local count
-    count=$(find "${BUNDLED_DIR}" -name "*.md" | wc -l | tr -d ' ')
-    log "Standard library installed: ${count} .md files in bundled_skills path"
+    count=$(find "${BUNDLED_DIR}" -name "SKILL.md" | wc -l | tr -d ' ')
+    log "Standard library installed: ${count} SKILL.md files in bundled_skills path"
     log ""
-    log "NOTE: Bundled SKILL.md files removed. Only standard library content is present."
-    log "      The agent will discover router.md, routers/, playbooks/, and primitives/."
+    log "NOTE: Bundled skills replaced with standard library SKILL.md wrappers."
+    log "      Skills: standard-router, data-security, data-transformation, app-deployment"
     log ""
     log "Arm B ready. Start Cortex Code CLI normally:"
     log "  cortex"
