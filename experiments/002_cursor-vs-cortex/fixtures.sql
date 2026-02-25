@@ -222,8 +222,8 @@ AS
     priority,
     created_at,
     resolved_at,
-    SNOWFLAKE.CORTEX.CLASSIFY_TEXT(body, ['billing', 'technical', 'account', 'feature_request']):label::VARCHAR AS category,
-    SNOWFLAKE.CORTEX.SENTIMENT(body) AS sentiment_score
+    AI_CLASSIFY(body, ['billing', 'technical', 'account', 'feature_request']):labels[0]::VARCHAR AS category,
+    AI_SENTIMENT(body):categories[0]:sentiment::VARCHAR AS sentiment
   FROM RAW.SUPPORT_TICKETS;
 
 -- ============================================================================

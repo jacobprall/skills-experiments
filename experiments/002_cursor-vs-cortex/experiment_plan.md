@@ -297,7 +297,7 @@ AS
   SELECT
     ticket_id, customer_id, subject, body, priority, created_at, resolved_at,
     AI_CLASSIFY(body, ['billing', 'technical', 'account', 'feature_request']):labels[0]::VARCHAR AS category,
-    AI_SENTIMENT(body) AS sentiment_score
+    AI_SENTIMENT(body):categories[0]:sentiment::VARCHAR AS sentiment
   FROM RAW.SUPPORT_TICKETS;
 -- This is the trap for T6: AI functions re-run on every refresh
 ```
