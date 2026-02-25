@@ -166,7 +166,7 @@ For each new domain:
                ▼
 ┌──────────────────────────────────────────────┐
 │ snow CLI                                      │
-│  snow sql -q "..." --connection snowhouse     │
+│  snow sql -q "..." --database DB              │
 │  snow stage copy ...                          │
 │  snow streamlit deploy ...                    │
 └──────────────────────────────────────────────┘
@@ -177,7 +177,7 @@ For each new domain:
 1. **Project directory:** Create a Cursor project with the standard library as context
 2. **`.cursorrules`:** Points to `router.md` as the primary instruction set. Include domain routers, playbooks, and primitives as available files the agent can read
 3. **Tool access:** Cursor gets `bash` with `snow` CLI on PATH
-4. **Connection:** Same `snowhouse` connection in `~/.snowflake/connections.toml`
+4. **Connection:** Default connection in `~/.snowflake/connections.toml` (no `-c` flag needed)
 5. **Model:** Match Cortex Code's model (Claude) as closely as possible. Pin model version if possible.
 
 ### `.cursorrules` Design
@@ -192,7 +192,7 @@ deploy apps, analyze costs, process documents, and monitor data quality on Snowf
 2. For each domain, read the domain router to understand available playbooks and primitives
 3. Follow playbook steps sequentially — do not skip steps
 4. Use primitives for SQL syntax reference — do not improvise SQL patterns
-5. Execute SQL via: snow sql -q "YOUR SQL" --connection snowhouse --role ROLE --warehouse WH
+5. Execute SQL via: snow sql -q "YOUR SQL" --database SNOWFLAKE_LEARNING_DB --role ROLE --warehouse WH
 
 ## Available Context Files
 
@@ -544,13 +544,13 @@ Rate per error encountered:
 
 ### Arm A: Cortex Code + Bundled Skills
 
-Same as experiment 001. Use original bundled skills (restored from backup). Same `snowhouse` connection.
+Same as experiment 001. Use original bundled skills (restored from backup). Same default connection.
 
 ### Arm B: Cursor CLI + Standard Skills Library
 
 1. Create a Cursor project directory with the expanded standard library
 2. Configure `.cursorrules` as described above
-3. Ensure `snow` CLI is on PATH with `snowhouse` connection
+3. Ensure `snow` CLI is on PATH with default connection configured
 4. Launch Cursor in the project directory
 5. Paste prompts exactly as written
 
