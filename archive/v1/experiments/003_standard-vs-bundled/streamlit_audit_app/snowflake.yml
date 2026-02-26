@@ -1,0 +1,14 @@
+definition_version: "2"
+entities:
+  compliance_audit_dashboard:
+    type: streamlit
+    identifier:
+      name: COMPLIANCE_AUDIT_DASHBOARD
+      schema: GOVERNANCE_B
+      database: SNOWFLAKE_LEARNING_DB
+    title: "Compliance Audit Dashboard"
+    main_file: app.py
+    stage: GOVERNANCE_B.AUDIT_APP_STAGE
+    query_warehouse: SNOWFLAKE_LEARNING_WH
+    artifacts:
+      - app.py

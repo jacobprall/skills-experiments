@@ -1,0 +1,43 @@
+---
+description: Snowflake experiment environment context and skills
+globs:
+alwaysApply: true
+---
+
+# Snowflake Environment
+
+## Connection
+- **Connection name:** `default`
+- **Account:** SFCOGSOPS-SNOWHOUSE_AWS_US_WEST_2
+- **Role:** SNOWFLAKE_LEARNING_ADMIN_ROLE
+- **Restricted role (for testing):** SNOWFLAKE_LEARNING_ROLE
+- **Warehouse:** SNOWFLAKE_LEARNING_WH
+- **Database:** SNOWFLAKE_LEARNING_DB
+
+## Schemas (Arm B)
+- **Source data:** RAW_B
+- **Intermediate:** STAGING_B
+- **Final outputs:** ANALYTICS_B
+- **Policies/governance:** GOVERNANCE_B
+
+## SQL Execution
+Run all SQL via the Snowflake CLI:
+
+```bash
+snow sql -q "<SQL>" -c default
+```
+
+For multi-line queries:
+```bash
+snow sql -q "
+SELECT ...
+FROM ...
+" -c default
+```
+
+## Skills Library
+For ANY Snowflake task, read the standard skills library entry point FIRST AND ONLY:
+
+**Read this file before starting:** `/Users/jprall/Desktop/snowflake-standard-skills/SKILL.md`
+
+Then follow the routing instructions — read the relevant domain router, then the playbook or primitive it points to. All skill files are under `/Users/jprall/Desktop/snowflake-standard-skills/`. ONLY READ FILES FROM THIS DIRECTORY.
