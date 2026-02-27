@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SFBench Dashboard</title>
+<style>
+  :root { --pass: #22c55e; --fail: #ef4444; --bg: #0f172a; --card: #1e293b;
+           --text: #e2e8f0; --border: #334155; --accent: #3b82f6; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background:var(--bg);
+          color:var(--text); padding:2rem; }
+  h1 { font-size:1.8rem; margin-bottom:.5rem; }
+  h2 { font-size:1.3rem; margin:1.5rem 0 .75rem; border-bottom:1px solid var(--border);
+        padding-bottom:.5rem; }
+  h3 { font-size:1.1rem; margin-bottom:.5rem; }
+  h4 { font-size:.9rem; margin:.75rem 0 .25rem; color:#94a3b8; }
+  .summary { display:flex; gap:2rem; margin:1rem 0 2rem; }
+  .stat { background:var(--card); padding:1rem 1.5rem; border-radius:.5rem;
+           border:1px solid var(--border); }
+  .stat .label { font-size:.75rem; color:#94a3b8; text-transform:uppercase; }
+  .stat .value { font-size:1.5rem; font-weight:700; margin-top:.25rem; }
+  table { width:100%; border-collapse:collapse; margin:.5rem 0; }
+  th, td { padding:.5rem .75rem; text-align:left; border:1px solid var(--border); }
+  th { background:#1e293b; font-size:.8rem; text-transform:uppercase; color:#94a3b8; }
+  td { font-size:.85rem; }
+  .task-id { font-weight:600; }
+  .pass { color:var(--pass); font-weight:600; }
+  .fail { color:var(--fail); font-weight:600; }
+  .na { color:#475569; }
+  .trial-card { background:var(--card); border:1px solid var(--border); border-radius:.5rem;
+                 padding:1rem 1.25rem; margin:.75rem 0; }
+  .detail { font-size:.8rem; }
+  .detail th { font-size:.7rem; }
+</style>
+</head>
+<body>
+<h1>SFBench Dashboard</h1>
+<p style="color:#94a3b8">Snowflake Operations Benchmark Results</p>
+
+<div class="summary">
+  <div class="stat"><div class="label">Total Trials</div><div class="value">6</div></div>
+  <div class="stat"><div class="label">Passed</div><div class="value pass">3</div></div>
+  <div class="stat"><div class="label">Failed</div><div class="value fail">3</div></div>
+  <div class="stat"><div class="label">Avg Score</div><div class="value">70%</div></div>
+</div>
+
+<h2>Results Matrix</h2>
+<table>
+  <tr><th>Task</th><th>sage / none</th></tr>
+  <tr><td class='task-id'>mask_001</td><td class='pass'>100%</td></tr>
+
+</table>
+
+<h2>Trial Details</h2>
+
+        <div class="trial-card" id="trial-20260226_161205_e5843f">
+            <h3>mask_001 — <span class="fail">40%</span></h3>
+            <p>Agent: sage | Duration: 28.2s | Run: 20260226_161205_e5843f</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>masking_returns_masked_value</td><td class='fail'>FAIL</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>0.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>0.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr></table>
+            
+        </div>
+        
+        <div class="trial-card" id="trial-20260226_161908_e120f5">
+            <h3>mask_001 — <span class="fail">40%</span></h3>
+            <p>Agent: sage | Duration: 26.3s | Run: 20260226_161908_e120f5</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>policy_has_mask_pattern</td><td class='fail'>FAIL</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>0.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>0.0/2.0</td></tr></table>
+            
+        </div>
+        
+        <div class="trial-card" id="trial-20260226_163712_599f7a">
+            <h3>mask_001 — <span class="fail">40%</span></h3>
+            <p>Agent: sage | Duration: 28.7s | Run: 20260226_163712_599f7a</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>policy_has_mask_pattern</td><td class='fail'>FAIL</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>0.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>0.0/2.0</td></tr></table>
+            
+        </div>
+        
+        <div class="trial-card" id="trial-20260226_164822_3cf50b">
+            <h3>mask_001 — <span class="pass">100%</span></h3>
+            <p>Agent: sage | Duration: 30.5s | Run: 20260226_164822_3cf50b</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>policy_has_mask_pattern</td><td class='pass'>PASS</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>1.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr></table>
+            
+        </div>
+        
+        <div class="trial-card" id="trial-20260226_165344_498fe1">
+            <h3>mask_001 — <span class="pass">100%</span></h3>
+            <p>Agent: sage | Duration: 25.6s | Run: 20260226_165344_498fe1</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>policy_has_mask_pattern</td><td class='pass'>PASS</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>1.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr></table>
+            
+        </div>
+        
+        <div class="trial-card" id="trial-20260226_165533_787445">
+            <h3>mask_001 — <span class="pass">100%</span></h3>
+            <p>Agent: sage | Duration: 28.1s | Run: 20260226_165533_787445</p>
+            <h4>Requirements</h4><table class='detail'><tr><th>ID</th><th>Status</th></tr><tr><td>ssn_has_masking_policy</td><td class='pass'>PASS</td></tr><tr><td>policy_has_mask_pattern</td><td class='pass'>PASS</td></tr></table>
+            <h4>Assertions</h4><table class='detail'><tr><th>ID</th><th>Category</th><th>Type</th><th>Points</th></tr><tr><td>policy_in_governance_schema</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr><tr><td>policy_correct_return_type</td><td>governance</td><td>sql</td><td>1.0/1.0</td></tr><tr><td>admin_sees_cleartext</td><td>governance</td><td>sql</td><td>2.0/2.0</td></tr></table>
+            
+        </div>
+        
+
+</body>
+</html>

@@ -106,14 +106,21 @@ def validate(
 
 @app.command()
 def view(
-    what: str = typer.Argument("results", help="What to view: results, tasks"),
-    last: bool = typer.Option(False, "--last", help="View most recent run"),
+    what: str = typer.Argument("results", help="What to view: results, tasks, dashboard"),
+    output: Optional[Path] = typer.Option(None, "--output", help="Output path for dashboard HTML"),
 ) -> None:
-    """View results or task inventory."""
+    """View results, task inventory, or generate HTML dashboard."""
     if what == "tasks":
         _view_tasks()
+    elif what == "dashboard":
+        from sfbench.evaluator.dashboard import generate_dashboard
+        path = generate_dashboard(output)
+        if path and path.exists():
+            console.print(f"[green]Dashboard: {path}[/green]")
+    elif what == "results":
+        _view_results()
     else:
-        console.print("[yellow]Results viewer not yet implemented.[/yellow]")
+        console.print(f"[yellow]Unknown view target: {what}. Use: tasks, results, dashboard[/yellow]")
 
 
 @app.command()
@@ -151,6 +158,43 @@ def _view_tasks() -> None:
     console.print(table)
 
 
+def _view_results() -> None:
+    """Show latest results in a summary table."""
+    import json
+
+    result_files = sorted(RESULTS_DIR.rglob("trial_result.json")) if RESULTS_DIR.exists() else []
+    if not result_files:
+        console.print("[yellow]No results found. Run some tasks first.[/yellow]")
+        return
+
+    table = Table(title="All Results")
+    table.add_column("Run ID")
+    table.add_column("Task")
+    table.add_column("Agent")
+    table.add_column("Result")
+    table.add_column("Score")
+    table.add_column("Duration")
+
+    for f in result_files[-50:]:  # last 50
+        try:
+            data = json.loads(f.read_text())
+            passed = data.get("passed", False)
+            status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
+            table.add_row(
+                data.get("run_id", "")[:20],
+                data.get("task_id", ""),
+                data.get("agent", ""),
+                status,
+                f"{data.get('composite_pct', 0):.0f}%",
+                f"{data.get('duration_seconds', 0):.0f}s",
+            )
+        except Exception:
+            continue
+
+    console.print(table)
+    console.print(f"\nRun `sfbench view dashboard` to generate an HTML report.")
+
+
 def _print_summary(results: list) -> None:
     table = Table(title="Results Summary")
     table.add_column("Task")
@@ -171,7 +215,15 @@ def _print_summary(results: list) -> None:
             passed += 1
 
     console.print(table)
-    console.print(f"\n{passed}/{len(results)} tasks passed ({100*passed/len(results):.0f}%)")
+    total = len(results)
+    console.print(f"\n{passed}/{total} tasks passed ({100*passed/max(total,1):.0f}%)")
+
+    # Auto-generate dashboard
+    from sfbench.evaluator.dashboard import generate_dashboard
+    try:
+        generate_dashboard()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
