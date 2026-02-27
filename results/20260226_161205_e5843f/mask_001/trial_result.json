@@ -1,0 +1,72 @@
+{
+  "task_id": "mask_001",
+  "agent": "sage",
+  "plugin_set": "none",
+  "model": null,
+  "run_id": "20260226_161205_e5843f",
+  "started_at": "2026-02-26T16:12:05.679459",
+  "finished_at": "2026-02-26T16:12:33.910686",
+  "requirement_results": [
+    {
+      "id": "ssn_has_masking_policy",
+      "passed": true,
+      "description": "The SSN column on CUSTOMERS has a masking policy applied.\n",
+      "actual_value": "{'CT': 1}",
+      "error": null
+    },
+    {
+      "id": "masking_returns_masked_value",
+      "passed": false,
+      "description": "The masking policy definition returns a masked value for non-admin roles. We verify by checking the policy body contains the expected mask pattern.\n",
+      "actual_value": null,
+      "error": "╭─ Error ──────────────────────────────────────────────────────────────────────╮\n│ 002003 (42S02): 01c2ae6c-0814-5bca-0001-dd6855445ba3: SQL compilation error: │\n│ Object 'SNOWFLAKE_LEARNING_DB.INFORMATION_SCHEMA.MASKING_POLICIES' does not  │\n│ exist or not authorized.                                                     │\n╰──────────────────────────────────────────────────────────────────────────────╯"
+    }
+  ],
+  "assertion_results": [
+    {
+      "id": "policy_in_governance_schema",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 2.0,
+      "points_earned": 0.0,
+      "passed": false,
+      "description": "Masking policy was created in the governance schema",
+      "actual_value": null,
+      "error": "╭─ Error ──────────────────────────────────────────────────────────────────────╮\n│ 002003 (42S02): 01c2ae6c-0814-547b-0001-dd685546b523: SQL compilation error: │\n│ Object 'SNOWFLAKE_LEARNING_DB.INFORMATION_SCHEMA.MASKING_POLICIES' does not  │\n│ exist or not authorized.                                                     │\n╰──────────────────────────────────────────────────────────────────────────────╯"
+    },
+    {
+      "id": "policy_correct_return_type",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 1.0,
+      "points_earned": 0.0,
+      "passed": false,
+      "description": "Policy uses VARCHAR return type matching the column type",
+      "actual_value": null,
+      "error": "╭─ Error ──────────────────────────────────────────────────────────────────────╮\n│ 002003 (42S02): 01c2ae6c-0814-636c-0001-dd685545d95f: SQL compilation error: │\n│ Object 'SNOWFLAKE_LEARNING_DB.INFORMATION_SCHEMA.MASKING_POLICIES' does not  │\n│ exist or not authorized.                                                     │\n╰──────────────────────────────────────────────────────────────────────────────╯"
+    },
+    {
+      "id": "admin_sees_cleartext",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 2.0,
+      "points_earned": 2.0,
+      "passed": true,
+      "description": "Admin role can still see cleartext SSN values",
+      "actual_value": "{'SSN': '317-47-6959'}",
+      "error": null
+    }
+  ],
+  "trap_results": [],
+  "transcript_path": "/Users/jprall/Desktop/skills_benchmark/results/20260226_161205_e5843f/mask_001/transcript.jsonl",
+  "error": null,
+  "requirements": {
+    "ssn_has_masking_policy": true,
+    "masking_returns_masked_value": false
+  },
+  "passed": false,
+  "total_points_available": 5.0,
+  "total_points_earned": 2.0,
+  "composite_pct": 40.0,
+  "duration_seconds": 28.231227
+}

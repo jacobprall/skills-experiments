@@ -1,0 +1,149 @@
+task_id: scenario_001
+status: ready
+difficulty: complex
+category: data-governance
+domains: [data-policy, data-engineering, data-transformation]
+description: >
+  Full PII protection scenario: classify data, create masking policies,
+  build a secure analytics pipeline, and create a data quality dashboard.
+  Migrated from v1 S1 experiment.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      We need to implement a complete data governance solution for our customer data
+      in {database}.{raw_schema}. Start by classifying the CUSTOMERS table to identify
+      PII columns. Then create appropriate masking policies in {governance_schema}
+      for each PII column you discover. Apply them to the source table. The {admin_role}
+      should see cleartext, everyone else gets masked data.
+
+  - step_id: 2
+    type: prompt
+    prompt: >
+      Great, now build a customer analytics pipeline. Create a dynamic table
+      {analytics_schema}.CUSTOMER_360 that joins CUSTOMERS with aggregated
+      ORDERS (total_orders, total_spent, avg_order_value) and aggregated
+      SUPPORT_TICKETS (open_tickets, total_tickets). Use a 1-minute target lag
+      with warehouse {warehouse}. Make sure the dynamic table does NOT contain
+      any AI function calls — those are too expensive for a DT.
+
+  - step_id: 3
+    type: redirect
+    subtype: scope_expansion
+    prompt: >
+      Actually, can you also create a support ticket dashboard view?
+      {analytics_schema}.TICKET_DASHBOARD should show ticket volume by status,
+      average resolution time, and top 10 customers by open ticket count.
+
+  - step_id: 4
+    type: checkpoint
+    prompt: >
+      Let's verify everything is working. Can you check that all PII columns
+      have masking policies, the dynamic table is producing data, and the
+      dashboard view works?
+
+requirements:
+  - id: all_pii_masked
+    description: All PII columns on CUSTOMERS have masking policies.
+    check: sql
+    query: |
+      WITH pii_cols AS (
+        SELECT column_name FROM (VALUES
+          ('SSN'),('EMAIL'),('PHONE'),('DATE_OF_BIRTH'),('CUSTOMER_NAME')
+        ) AS t(column_name)
+      ),
+      protected AS (
+        SELECT DISTINCT REF_COLUMN_NAME FROM TABLE(
+          INFORMATION_SCHEMA.POLICY_REFERENCES(
+            REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+            REF_ENTITY_DOMAIN => 'TABLE'
+          )
+        ) WHERE POLICY_KIND = 'MASKING_POLICY'
+      )
+      SELECT COUNT(*) AS gaps
+      FROM pii_cols c LEFT JOIN protected p ON c.column_name = p.REF_COLUMN_NAME
+      WHERE p.REF_COLUMN_NAME IS NULL
+    pass_if: gaps = 0
+
+  - id: customer_360_exists
+    description: CUSTOMER_360 dynamic table exists and has data.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.CUSTOMER_360
+    pass_if: ct > 0
+
+  - id: no_ai_in_dt
+    description: No AI functions in dynamic table definitions.
+    check: sql
+    query: |
+      SET dt_ddl_stmt = (
+        SELECT 'SELECT GET_DDL(''DYNAMIC_TABLE'', ''{database}.{analytics_schema}.CUSTOMER_360'') AS ddl'
+      );
+      EXECUTE IMMEDIATE $dt_ddl_stmt;
+      SELECT CASE
+        WHEN "DDL" ILIKE ANY ('%AI_CLASSIFY%','%AI_EXTRACT%','%AI_COMPLETE%','%AI_SENTIMENT%')
+        THEN 1 ELSE 0 END AS violations
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: violations = 0
+
+assertions:
+  - id: policies_in_governance
+    category: governance
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(DISTINCT REF_COLUMN_NAME) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY' AND POLICY_SCHEMA = '{governance_schema}'
+    check: ct >= 5
+    description: All masking policies in governance schema
+
+  - id: dashboard_exists
+    category: completeness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'TICKET_DASHBOARD'
+    check: ct > 0
+    description: Ticket dashboard view was created
+
+  - id: classify_ran
+    category: pii_discovery
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.TAG_REFERENCES(
+          '{database}.{raw_schema}.CUSTOMERS', 'TABLE'
+        )
+      ) WHERE TAG_NAME = 'SEMANTIC_CATEGORY'
+    check: ct > 0
+    description: SYSTEM$CLASSIFY was run
+
+traps:
+  - id: legacy_mask_email
+    description: >
+      LEGACY_MASK_EMAIL in governance schema returns NULL instead of masked value.
+      Agent should notice and replace/fix it.
+    detection_method: behavioral
+    points: 3
+
+  - id: unattached_mask_phone
+    description: >
+      MASK_PHONE exists but is not applied to any column.
+      Agent should use or replace it.
+    detection_method: behavioral
+    points: 2
+
+solution:
+  scripts:
+    - step1_classify.sql
+    - step2_policies.sql
+    - step3_pipeline.sql
+    - step4_dashboard.sql

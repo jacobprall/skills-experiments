@@ -1,0 +1,72 @@
+task_id: scenario_002
+status: ready
+difficulty: complex
+category: data-engineering
+domains: [data-transformation, data-engineering, cost-management]
+description: >
+  Build a complete ETL pipeline with staging, transformation, and analytics
+  layers. Includes stream-based CDC and scheduled tasks.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Build a 3-layer data pipeline in {database}:
+      1. STAGING: Create tables in {staging_schema} that clean and standardize
+         data from {raw_schema} (STG_CUSTOMERS, STG_ORDERS, STG_TICKETS)
+      2. ANALYTICS: Create a dynamic table {analytics_schema}.CUSTOMER_360
+         joining all staging tables with aggregations
+      3. CDC: Create a stream on {raw_schema}.ORDERS and a task that incrementally
+         loads new orders into {staging_schema}.STG_ORDERS_INCREMENTAL
+
+  - step_id: 2
+    type: constraint
+    prompt: >
+      Important constraint: the dynamic table must NOT use AI functions
+      (AI_CLASSIFY, AI_EXTRACT, etc.) — they're too expensive for continuous
+      refresh. Also, keep the target lag at 1 minute.
+
+requirements:
+  - id: staging_tables
+    description: All 3 staging tables exist.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{staging_schema}'
+        AND TABLE_NAME IN ('STG_CUSTOMERS','STG_ORDERS','STG_TICKETS')
+    pass_if: ct >= 3
+
+  - id: customer_360
+    description: CUSTOMER_360 dynamic table exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'CUSTOMER_360'
+        AND TABLE_TYPE = 'DYNAMIC TABLE'
+    pass_if: ct > 0
+
+assertions:
+  - id: stream_exists
+    category: cdc
+    type: sql
+    points: 2
+    query: |
+      SHOW STREAMS IN SCHEMA {database}.{staging_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: ct > 0
+    description: At least one stream was created
+
+  - id: task_exists
+    category: cdc
+    type: sql
+    points: 2
+    query: |
+      SHOW TASKS IN SCHEMA {database}.{staging_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: ct > 0
+    description: At least one task was created
+
+traps: []
+solution:
+  scripts: [solve.sql]

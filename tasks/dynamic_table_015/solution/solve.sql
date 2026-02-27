@@ -1,0 +1,13 @@
+USE ROLE {admin_role};
+USE WAREHOUSE {warehouse};
+
+CREATE OR REPLACE DYNAMIC TABLE {database}.{analytics_schema}.ORDER_SUMMARY_DT
+    TARGET_LAG = '1 minute'
+    WAREHOUSE = {warehouse}
+AS
+SELECT
+    PRODUCT_CATEGORY,
+    COUNT(*) AS TOTAL_ORDERS,
+    SUM(TOTAL_AMOUNT) AS TOTAL_REVENUE
+FROM {database}.{raw_schema}.ORDERS
+GROUP BY PRODUCT_CATEGORY;

@@ -1,0 +1,24 @@
+[project]
+name = "sfbench"
+version = "0.1.0"
+description = "Snowflake Operations Benchmark — evaluate AI agents on intent-to-SQL tasks"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "typer>=0.9.0",
+    "rich>=13.0",
+    "anthropic>=0.40",
+    "jinja2>=3.1",
+]
+
+[project.scripts]
+sfbench = "sfbench.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

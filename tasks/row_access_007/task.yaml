@@ -1,0 +1,49 @@
+task_id: row_access_007
+status: ready
+difficulty: simple
+category: data-governance
+domains: [data-policy]
+description: Create a row access policy that restricts SUPPORT_TICKETS by priority.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a row access policy in {database}.{governance_schema} that restricts
+      access to {database}.{raw_schema}.SUPPORT_TICKETS. The {restricted_role} should
+      only see tickets with PRIORITY = 'low'. The {admin_role} sees all rows.
+      Apply the policy to the table.
+
+requirements:
+  - id: rap_applied
+    description: Row access policy is applied to SUPPORT_TICKETS.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.SUPPORT_TICKETS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'ROW_ACCESS_POLICY'
+    pass_if: ct > 0
+
+assertions:
+  - id: rap_in_governance
+    category: governance
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.SUPPORT_TICKETS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'ROW_ACCESS_POLICY'
+        AND POLICY_SCHEMA = '{governance_schema}'
+    check: ct > 0
+    description: RAP stored in governance schema
+
+traps: []
+solution:
+  scripts: [solve.sql]

@@ -1,0 +1,20 @@
+USE ROLE {admin_role};
+USE WAREHOUSE {warehouse};
+
+CREATE OR REPLACE TABLE {database}.{analytics_schema}.DAILY_ORDER_SUMMARY (
+    ORDER_DATE DATE,
+    TOTAL_ORDERS INT,
+    TOTAL_REVENUE DECIMAL(12,2)
+);
+
+CREATE OR REPLACE TASK {database}.{staging_schema}.DAILY_ORDER_SUMMARY_TASK
+    WAREHOUSE = {warehouse}
+    SCHEDULE = 'USING CRON 0 * * * * UTC'
+AS
+INSERT INTO {database}.{analytics_schema}.DAILY_ORDER_SUMMARY
+SELECT
+    ORDER_DATE,
+    COUNT(*) AS TOTAL_ORDERS,
+    SUM(TOTAL_AMOUNT) AS TOTAL_REVENUE
+FROM {database}.{raw_schema}.ORDERS
+GROUP BY ORDER_DATE;

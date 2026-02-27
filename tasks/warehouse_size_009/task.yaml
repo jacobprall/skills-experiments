@@ -1,0 +1,38 @@
+task_id: warehouse_size_009
+status: ready
+difficulty: simple
+category: admin
+domains: [cost-management]
+description: Create a warehouse with auto-suspend and resource monitor.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a warehouse called {raw_schema}_ANALYTICS_WH in size X-SMALL
+      with auto_suspend=60, auto_resume=true, and initially_suspended=true.
+
+requirements:
+  - id: warehouse_exists
+    description: Warehouse was created.
+    check: sql
+    query: |
+      SHOW WAREHOUSES LIKE '{raw_schema}_ANALYTICS_WH';
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: ct > 0
+
+assertions:
+  - id: auto_suspend_set
+    category: cost
+    type: sql
+    points: 2
+    query: |
+      SHOW WAREHOUSES LIKE '{raw_schema}_ANALYTICS_WH';
+      SELECT "auto_suspend" AS val FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: val = 60
+    description: Auto-suspend is 60 seconds
+
+traps: []
+solution:
+  scripts: [solve.sql]

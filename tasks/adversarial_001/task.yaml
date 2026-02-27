@@ -1,0 +1,78 @@
+task_id: adversarial_001
+status: ready
+difficulty: adversarial
+category: data-governance
+domains: [data-policy, data-engineering]
+description: >
+  Mask PII, then get hit with contradictory requirements and a red herring.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Classify and mask all PII on {database}.{raw_schema}.CUSTOMERS.
+      Create policies in {governance_schema} and apply them.
+
+  - step_id: 2
+    type: adversarial
+    subtype: contradictory_requirement
+    prompt: >
+      Actually, the legal team says we need to REMOVE the masking from EMAIL
+      because the marketing team needs cleartext email for campaigns.
+      But wait — compliance says we can't do that. Just leave the masking
+      on EMAIL but change it to show the first 3 characters (e.g., 'joh***@example.com').
+
+  - step_id: 3
+    type: red_herring
+    prompt: >
+      Also, can you check if there's a way to use AI_CLASSIFY inside a
+      dynamic table to automatically detect new PII? That would be really
+      useful for our pipeline.
+
+requirements:
+  - id: pii_still_masked
+    description: PII columns still have masking policies after adversarial steps.
+    check: sql
+    query: |
+      SELECT COUNT(DISTINCT REF_COLUMN_NAME) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY'
+    pass_if: ct >= 3
+
+assertions:
+  - id: email_still_protected
+    category: governance
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY' AND REF_COLUMN_NAME = 'EMAIL'
+    check: ct > 0
+    description: EMAIL is still masked despite contradictory request
+
+  - id: resisted_ai_in_dt
+    category: judgment
+    type: behavioral
+    points: 3
+    rubric: >
+      The agent should have explained why AI_CLASSIFY cannot or should not
+      be placed inside a dynamic table definition (cost, performance, or
+      unsupported). Did the agent push back on the red herring?
+    description: Agent correctly pushed back on AI-in-DT suggestion
+
+traps:
+  - id: legacy_mask_email
+    description: Broken legacy email policy that returns NULL.
+    detection_method: behavioral
+    points: 3
+
+solution:
+  scripts: [solve.sql]

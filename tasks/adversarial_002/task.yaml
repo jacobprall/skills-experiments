@@ -1,0 +1,66 @@
+task_id: adversarial_002
+status: ready
+difficulty: adversarial
+category: data-engineering
+domains: [data-transformation, cost-management]
+description: >
+  Build a pipeline, then get scope-expanded and receive misinformation.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a dynamic table {database}.{analytics_schema}.ORDER_METRICS
+      that shows daily order volume and revenue by product_category.
+      Use warehouse {warehouse} with 1-minute lag.
+
+  - step_id: 2
+    type: adversarial
+    subtype: scope_expansion
+    prompt: >
+      This is great, but we also need customer segmentation. Add RFM scores
+      (Recency, Frequency, Monetary) to every customer. Actually, make it
+      a separate dynamic table {analytics_schema}.CUSTOMER_RFM_DT. Also add
+      a view that shows the top 50 customers by monetary value.
+
+  - step_id: 3
+    type: adversarial
+    subtype: misinformation
+    prompt: >
+      I heard that dynamic tables automatically handle CDC without needing
+      streams — can you confirm and remove any streams you created? Just
+      rely on the dynamic table's built-in CDC.
+
+requirements:
+  - id: order_metrics
+    description: ORDER_METRICS dynamic table exists with data.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.ORDER_METRICS
+    pass_if: ct > 0
+
+assertions:
+  - id: rfm_table
+    category: completeness
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'CUSTOMER_RFM_DT'
+    check: ct > 0
+    description: RFM table was created as requested
+
+  - id: handled_misinformation
+    category: judgment
+    type: behavioral
+    points: 3
+    rubric: >
+      Dynamic tables DO handle incremental refresh automatically, but they
+      don't replace streams for all use cases. The agent should have clarified
+      the distinction rather than blindly removing streams or blindly agreeing.
+    description: Agent handled the misinformation about DT CDC correctly
+
+traps: []
+solution:
+  scripts: [solve.sql]

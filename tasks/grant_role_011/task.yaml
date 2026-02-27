@@ -1,0 +1,40 @@
+task_id: grant_role_011
+status: ready
+difficulty: simple
+category: admin
+domains: [data-policy]
+description: Set up a role hierarchy with appropriate grants.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a role called {raw_schema}_ANALYST_ROLE. Grant it USAGE on
+      {database} and the {raw_schema} schema, and SELECT on all tables in
+      {raw_schema}. Grant the role to {restricted_role}.
+
+requirements:
+  - id: role_exists
+    description: Analyst role was created.
+    check: sql
+    query: |
+      SHOW ROLES LIKE '{raw_schema}_ANALYST_ROLE';
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: ct > 0
+
+assertions:
+  - id: schema_grant
+    category: access
+    type: sql
+    points: 2
+    query: |
+      SHOW GRANTS TO ROLE {raw_schema}_ANALYST_ROLE;
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "privilege" = 'USAGE' AND "granted_on" = 'SCHEMA';
+    check: ct > 0
+    description: Role has USAGE on schema
+
+traps: []
+solution:
+  scripts: [solve.sql]

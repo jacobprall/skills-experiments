@@ -1,0 +1,52 @@
+task_id: create_task_013
+status: ready
+difficulty: simple
+category: data-engineering
+domains: [data-transformation]
+description: Create a Snowflake task that aggregates daily order totals.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a task {database}.{staging_schema}.DAILY_ORDER_SUMMARY_TASK
+      that runs every hour using warehouse {warehouse}. It should INSERT INTO
+      a table {database}.{analytics_schema}.DAILY_ORDER_SUMMARY
+      (ORDER_DATE DATE, TOTAL_ORDERS INT, TOTAL_REVENUE DECIMAL(12,2))
+      by aggregating from {raw_schema}.ORDERS. Create the target table first.
+
+requirements:
+  - id: task_exists
+    description: Task was created.
+    check: sql
+    query: |
+      SHOW TASKS IN SCHEMA {database}.{staging_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "name" = 'DAILY_ORDER_SUMMARY_TASK';
+    pass_if: ct > 0
+
+  - id: target_table_exists
+    description: Target summary table exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'DAILY_ORDER_SUMMARY'
+    pass_if: ct > 0
+
+assertions:
+  - id: task_schedule
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SHOW TASKS IN SCHEMA {database}.{staging_schema};
+      SELECT "schedule" AS val FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "name" = 'DAILY_ORDER_SUMMARY_TASK';
+    check: val != null
+    description: Task has a schedule configured
+
+traps: []
+solution:
+  scripts: [solve.sql]

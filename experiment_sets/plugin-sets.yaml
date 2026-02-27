@@ -1,0 +1,21 @@
+# Plugin sets define what skills, rules, and tools are available to agents.
+# Each set configures a workspace that shapes agent behavior during trials.
+
+plugin_sets:
+  blind:
+    description: "No skills, no rules, no MCP — pure base model"
+    skills_dir: null
+    cursor_rules: null
+    mcp_servers: []
+
+  standard-skills:
+    description: "Standard Snowflake skills library"
+    skills_dir: "/Users/jprall/Desktop/snowflake-standard-skills"
+    cursor_rules: "/Users/jprall/Desktop/skills_benchmark/.cursor/rules/snowflake-experiment.mdc"
+    mcp_servers: []
+
+  bundled-skills:
+    description: "Bundled skills snapshot"
+    skills_dir: "/Users/jprall/Desktop/skills_benchmark/bundled-skills-snapshot"
+    cursor_rules: "/Users/jprall/Desktop/skills_benchmark/.cursor/rules/snowflake-experiment.mdc"
+    mcp_servers: []

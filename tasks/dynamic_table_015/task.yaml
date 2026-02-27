@@ -1,0 +1,41 @@
+task_id: dynamic_table_015
+status: ready
+difficulty: simple
+category: data-engineering
+domains: [data-transformation]
+description: Create a dynamic table for real-time order summaries.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a dynamic table {database}.{analytics_schema}.ORDER_SUMMARY_DT
+      with a target lag of 1 minute using warehouse {warehouse}.
+      It should aggregate ORDERS by PRODUCT_CATEGORY showing total_orders
+      and total_revenue.
+
+requirements:
+  - id: dt_exists
+    description: Dynamic table was created.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'ORDER_SUMMARY_DT'
+        AND TABLE_TYPE = 'DYNAMIC TABLE'
+    pass_if: ct > 0
+
+assertions:
+  - id: dt_has_data
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.ORDER_SUMMARY_DT
+    check: ct > 0
+    description: Dynamic table produces results
+
+traps: []
+solution:
+  scripts: [solve.sql]

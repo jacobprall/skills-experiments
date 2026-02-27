@@ -1,0 +1,39 @@
+task_id: time_travel_016
+status: ready
+difficulty: simple
+category: admin
+domains: [data-engineering]
+description: Configure time travel retention on tables.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Set the DATA_RETENTION_TIME_IN_DAYS to 14 on the
+      {database}.{raw_schema}.CUSTOMERS table and 7 on the
+      {database}.{raw_schema}.ORDERS table.
+
+requirements:
+  - id: customers_retention
+    description: CUSTOMERS has 14-day retention.
+    check: sql
+    query: |
+      SHOW TABLES LIKE 'CUSTOMERS' IN SCHEMA {database}.{raw_schema};
+      SELECT "retention_time" AS val FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: val = 14
+
+assertions:
+  - id: orders_retention
+    category: admin
+    type: sql
+    points: 2
+    query: |
+      SHOW TABLES LIKE 'ORDERS' IN SCHEMA {database}.{raw_schema};
+      SELECT "retention_time" AS val FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: val = 7
+    description: ORDERS has 7-day retention
+
+traps: []
+solution:
+  scripts: [solve.sql]

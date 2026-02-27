@@ -1,0 +1,65 @@
+task_id: incremental_load_s07
+status: ready
+difficulty: standard
+category: data-engineering
+domains: [data-transformation]
+description: Build an incremental load pipeline using streams and tasks.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Build an incremental pipeline for ORDERS:
+      1. Create a stream {staging_schema}.ORDERS_CHANGES on {raw_schema}.ORDERS
+      2. Create table {analytics_schema}.ORDERS_INCREMENTAL (same schema as ORDERS plus LOADED_AT)
+      3. Create a task {staging_schema}.LOAD_ORDERS that runs every 5 min using
+         warehouse {warehouse}, reads from the stream, and inserts into the target.
+         Only run when the stream has data (use SYSTEM$STREAM_HAS_DATA).
+      All in {database}.
+
+requirements:
+  - id: stream_exists
+    description: Orders stream exists.
+    check: sql
+    query: |
+      SHOW STREAMS IN SCHEMA {database}.{staging_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "name" = 'ORDERS_CHANGES';
+    pass_if: ct > 0
+
+  - id: task_exists
+    description: Load task exists.
+    check: sql
+    query: |
+      SHOW TASKS IN SCHEMA {database}.{staging_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "name" = 'LOAD_ORDERS';
+    pass_if: ct > 0
+
+assertions:
+  - id: target_table
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'ORDERS_INCREMENTAL'
+    check: ct > 0
+    description: Target table exists
+
+  - id: has_loaded_at
+    category: correctness
+    type: sql
+    points: 1
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'ORDERS_INCREMENTAL'
+        AND COLUMN_NAME = 'LOADED_AT'
+    check: ct > 0
+    description: Target has LOADED_AT column
+
+traps: []
+solution:
+  scripts: [solve.sql]

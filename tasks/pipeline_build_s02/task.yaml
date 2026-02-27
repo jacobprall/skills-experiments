@@ -1,0 +1,52 @@
+task_id: pipeline_build_s02
+status: ready
+difficulty: standard
+category: data-engineering
+domains: [data-transformation, data-engineering]
+description: Build a staging-to-analytics pipeline using dynamic tables.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Build a data pipeline from {raw_schema} to {analytics_schema} in {database}:
+      1. Create a dynamic table {analytics_schema}.CUSTOMER_360 that joins CUSTOMERS
+         with aggregated ORDERS (total_orders, total_spent, last_order_date) and
+         aggregated SUPPORT_TICKETS (open_tickets, resolved_tickets).
+      2. Use a target lag of 1 minute and warehouse {warehouse}.
+
+requirements:
+  - id: dt_exists
+    description: CUSTOMER_360 dynamic table exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'CUSTOMER_360'
+        AND TABLE_TYPE = 'DYNAMIC TABLE'
+    pass_if: ct > 0
+
+assertions:
+  - id: dt_has_data
+    category: correctness
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.CUSTOMER_360
+    check: ct > 0
+    description: Dynamic table produces rows
+
+  - id: has_order_agg
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'CUSTOMER_360'
+        AND COLUMN_NAME IN ('TOTAL_ORDERS', 'TOTAL_SPENT', 'LAST_ORDER_DATE')
+    check: ct >= 2
+    description: Has order aggregation columns
+
+traps: []
+solution:
+  scripts: [solve.sql]

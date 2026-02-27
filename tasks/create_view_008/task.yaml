@@ -1,0 +1,50 @@
+task_id: create_view_008
+status: ready
+difficulty: simple
+category: data-engineering
+domains: [data-transformation]
+description: Create a secure view joining CUSTOMERS and ORDERS.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a secure view {database}.{analytics_schema}.CUSTOMER_ORDERS that joins
+      CUSTOMERS and ORDERS from {raw_schema}. Include customer_id, customer_name,
+      order_id, order_date, total_amount, and status. Make it a secure view.
+
+requirements:
+  - id: view_exists
+    description: The CUSTOMER_ORDERS view exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'CUSTOMER_ORDERS'
+    pass_if: ct > 0
+
+assertions:
+  - id: view_is_secure
+    category: security
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'CUSTOMER_ORDERS'
+        AND IS_SECURE = 'YES'
+    check: ct > 0
+    description: View is marked as secure
+
+  - id: view_returns_data
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.CUSTOMER_ORDERS
+    check: ct > 0
+    description: View returns rows
+
+traps: []
+solution:
+  scripts: [solve.sql]

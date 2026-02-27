@@ -1,0 +1,57 @@
+task_id: scenario_004
+status: ready
+difficulty: complex
+category: admin
+domains: [data-policy, cost-management, data-engineering]
+description: >
+  Onboard a new analytics team: create role hierarchy, configure warehouse,
+  set up resource monitors, and create curated views.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      We're onboarding a new analytics team. In {database}:
+      1. Create a role {raw_schema}_ANALYTICS_TEAM with SELECT on all raw tables
+      2. Create curated views in {analytics_schema}: CUSTOMER_SUMMARY, ORDER_SUMMARY
+      3. Grant the team role access to the analytics schema
+
+  - step_id: 2
+    type: prompt
+    prompt: >
+      Now set up cost controls:
+      1. Create a warehouse {raw_schema}_TEAM_WH (X-SMALL, auto-suspend 60s)
+      2. Make sure the team role can use it but not resize it
+
+requirements:
+  - id: team_role
+    description: Analytics team role exists.
+    check: sql
+    query: |
+      SHOW ROLES LIKE '{raw_schema}_ANALYTICS_TEAM';
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: ct > 0
+
+  - id: curated_views
+    description: At least one curated view exists in analytics schema.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+    pass_if: ct > 0
+
+assertions:
+  - id: team_wh
+    category: cost
+    type: sql
+    points: 3
+    query: |
+      SHOW WAREHOUSES LIKE '{raw_schema}_TEAM_WH';
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: ct > 0
+    description: Team warehouse was created
+
+traps: []
+solution:
+  scripts: [solve.sql]

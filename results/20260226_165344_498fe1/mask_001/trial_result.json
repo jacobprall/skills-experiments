@@ -1,0 +1,72 @@
+{
+  "task_id": "mask_001",
+  "agent": "sage",
+  "plugin_set": "none",
+  "model": null,
+  "run_id": "20260226_165344_498fe1",
+  "started_at": "2026-02-26T16:53:44.560171",
+  "finished_at": "2026-02-26T16:54:10.165232",
+  "requirement_results": [
+    {
+      "id": "ssn_has_masking_policy",
+      "passed": true,
+      "description": "The SSN column on CUSTOMERS has a masking policy applied.\n",
+      "actual_value": "{'CT': 1}",
+      "error": null
+    },
+    {
+      "id": "policy_has_mask_pattern",
+      "passed": true,
+      "description": "The masking policy body contains the expected mask pattern.\n",
+      "actual_value": "{'HAS_MASK': 1}",
+      "error": null
+    }
+  ],
+  "assertion_results": [
+    {
+      "id": "policy_in_governance_schema",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 2.0,
+      "points_earned": 2.0,
+      "passed": true,
+      "description": "Masking policy was created in the governance schema",
+      "actual_value": "{'CT': 1}",
+      "error": null
+    },
+    {
+      "id": "policy_correct_return_type",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 1.0,
+      "points_earned": 1.0,
+      "passed": true,
+      "description": "Policy uses VARCHAR/STRING return type matching the column type",
+      "actual_value": "{'CORRECT_TYPE': 1}",
+      "error": null
+    },
+    {
+      "id": "admin_sees_cleartext",
+      "category": "governance",
+      "type": "sql",
+      "points_available": 2.0,
+      "points_earned": 2.0,
+      "passed": true,
+      "description": "Admin role is referenced in policy for cleartext access",
+      "actual_value": "{'ADMIN_EXEMPT': 1}",
+      "error": null
+    }
+  ],
+  "trap_results": [],
+  "transcript_path": "/Users/jprall/Desktop/skills_benchmark/results/20260226_165344_498fe1/mask_001/transcript.jsonl",
+  "error": null,
+  "requirements": {
+    "ssn_has_masking_policy": true,
+    "policy_has_mask_pattern": true
+  },
+  "passed": true,
+  "total_points_available": 5.0,
+  "total_points_earned": 5.0,
+  "composite_pct": 100.0,
+  "duration_seconds": 25.605061
+}

@@ -1,0 +1,49 @@
+task_id: mask_phone_003
+status: ready
+difficulty: simple
+category: data-governance
+domains: [data-policy]
+description: Create and apply a phone masking policy on the CUSTOMERS table.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a masking policy for the PHONE column on {database}.{raw_schema}.CUSTOMERS.
+      Show only the last 4 digits (e.g., '***-***-1234') for non-admin roles.
+      Store the policy in {governance_schema}.
+
+requirements:
+  - id: phone_has_policy
+    description: PHONE column has a masking policy applied.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY' AND REF_COLUMN_NAME = 'PHONE'
+    pass_if: ct > 0
+
+assertions:
+  - id: policy_in_governance
+    category: governance
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY'
+        AND REF_COLUMN_NAME = 'PHONE'
+        AND POLICY_SCHEMA = '{governance_schema}'
+    check: ct > 0
+    description: Policy stored in governance schema
+
+traps: []
+solution:
+  scripts: [solve.sql]

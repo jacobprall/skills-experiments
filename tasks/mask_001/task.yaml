@@ -1,0 +1,136 @@
+task_id: mask_001
+status: ready
+difficulty: simple
+category: data-governance
+domains:
+  - data-policy
+description: >
+  Create and apply an SSN masking policy on the CUSTOMERS table.
+  The policy should fully mask SSN values for non-privileged roles
+  while allowing the admin role to see cleartext.
+tags:
+  - masking
+  - governance
+  - pii
+environment: support_tickets
+
+setup:
+  scripts: []
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      We have a CUSTOMERS table in the {raw_schema} schema of the {database} database
+      that contains an SSN column with sensitive data. Please create a masking policy
+      that fully masks SSN values (returns '***-**-****') for all roles except
+      {admin_role}, and apply it to the SSN column on the CUSTOMERS table.
+      Use the {governance_schema} schema for policy objects.
+
+requirements:
+  - id: ssn_has_masking_policy
+    description: >
+      The SSN column on CUSTOMERS has a masking policy applied.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY'
+        AND REF_COLUMN_NAME = 'SSN'
+    pass_if: ct > 0
+
+  - id: policy_has_mask_pattern
+    description: >
+      The masking policy body contains the expected mask pattern.
+    check: sql
+    query: |
+      SET policy_desc_stmt = (
+        SELECT 'DESCRIBE MASKING POLICY ' || POLICY_DB || '.' || POLICY_SCHEMA || '.' || POLICY_NAME
+        FROM TABLE(
+          INFORMATION_SCHEMA.POLICY_REFERENCES(
+            REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+            REF_ENTITY_DOMAIN => 'TABLE'
+          )
+        ) WHERE POLICY_KIND = 'MASKING_POLICY'
+          AND REF_COLUMN_NAME = 'SSN'
+        LIMIT 1
+      );
+      EXECUTE IMMEDIATE $policy_desc_stmt;
+      SELECT CASE WHEN "body" ILIKE '%***-**-****%' THEN 1 ELSE 0 END AS has_mask
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    pass_if: has_mask = 1
+
+assertions:
+  - id: policy_in_governance_schema
+    category: governance
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY'
+        AND REF_COLUMN_NAME = 'SSN'
+        AND POLICY_SCHEMA = '{governance_schema}'
+    check: ct > 0
+    description: Masking policy was created in the governance schema
+
+  - id: policy_correct_return_type
+    category: governance
+    type: sql
+    points: 1
+    query: |
+      SET policy_desc_stmt = (
+        SELECT 'DESCRIBE MASKING POLICY ' || POLICY_DB || '.' || POLICY_SCHEMA || '.' || POLICY_NAME
+        FROM TABLE(
+          INFORMATION_SCHEMA.POLICY_REFERENCES(
+            REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+            REF_ENTITY_DOMAIN => 'TABLE'
+          )
+        ) WHERE POLICY_KIND = 'MASKING_POLICY'
+          AND REF_COLUMN_NAME = 'SSN'
+        LIMIT 1
+      );
+      EXECUTE IMMEDIATE $policy_desc_stmt;
+      SELECT CASE
+        WHEN "return_type" ILIKE '%VARCHAR%' OR "return_type" ILIKE '%STRING%'
+        THEN 1 ELSE 0 END AS correct_type
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: correct_type > 0
+    description: Policy uses VARCHAR/STRING return type matching the column type
+
+  - id: admin_sees_cleartext
+    category: governance
+    type: sql
+    points: 2
+    query: |
+      SET policy_desc_stmt = (
+        SELECT 'DESCRIBE MASKING POLICY ' || POLICY_DB || '.' || POLICY_SCHEMA || '.' || POLICY_NAME
+        FROM TABLE(
+          INFORMATION_SCHEMA.POLICY_REFERENCES(
+            REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+            REF_ENTITY_DOMAIN => 'TABLE'
+          )
+        ) WHERE POLICY_KIND = 'MASKING_POLICY'
+          AND REF_COLUMN_NAME = 'SSN'
+        LIMIT 1
+      );
+      EXECUTE IMMEDIATE $policy_desc_stmt;
+      SELECT CASE WHEN "body" ILIKE '%{admin_role}%' THEN 1 ELSE 0 END AS admin_exempt
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+    check: admin_exempt > 0
+    description: Admin role is referenced in policy for cleartext access
+
+traps: []
+
+solution:
+  scripts:
+    - solve.sql
+
+teardown:
+  scripts: []

@@ -1,0 +1,67 @@
+task_id: tag_pii_006
+status: ready
+difficulty: simple
+category: data-governance
+domains: [data-policy]
+description: Create a custom PII tag and apply it to sensitive columns on CUSTOMERS.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a tag called PII_LEVEL in {database}.{governance_schema} with allowed values
+      'HIGH', 'MEDIUM', 'LOW'. Tag the SSN column as HIGH, EMAIL as MEDIUM,
+      and PHONE as MEDIUM on {database}.{raw_schema}.CUSTOMERS.
+
+requirements:
+  - id: tag_exists
+    description: PII_LEVEL tag exists in governance schema.
+    check: sql
+    query: |
+      SHOW TAGS IN SCHEMA {database}.{governance_schema};
+      SELECT COUNT(*) AS ct FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE "name" = 'PII_LEVEL';
+    pass_if: ct > 0
+
+  - id: ssn_tagged_high
+    description: SSN column tagged with PII_LEVEL.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.TAG_REFERENCES(
+          '{database}.{raw_schema}.CUSTOMERS', 'TABLE'
+        )
+      ) WHERE TAG_NAME = 'PII_LEVEL' AND COLUMN_NAME = 'SSN'
+    pass_if: ct > 0
+
+assertions:
+  - id: email_tagged
+    category: tagging
+    type: sql
+    points: 1
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.TAG_REFERENCES(
+          '{database}.{raw_schema}.CUSTOMERS', 'TABLE'
+        )
+      ) WHERE TAG_NAME = 'PII_LEVEL' AND COLUMN_NAME = 'EMAIL'
+    check: ct > 0
+    description: EMAIL column tagged
+
+  - id: phone_tagged
+    category: tagging
+    type: sql
+    points: 1
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.TAG_REFERENCES(
+          '{database}.{raw_schema}.CUSTOMERS', 'TABLE'
+        )
+      ) WHERE TAG_NAME = 'PII_LEVEL' AND COLUMN_NAME = 'PHONE'
+    check: ct > 0
+    description: PHONE column tagged
+
+traps: []
+solution:
+  scripts: [solve.sql]

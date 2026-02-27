@@ -1,0 +1,41 @@
+# Named groups of tasks for easy invocation.
+# Usage: sfbench run @quick
+
+task_sets:
+  quick:
+    description: "Quick smoke test — 3 simple tasks"
+    tasks: [mask_001, create_view_008, dynamic_table_015]
+
+  simple:
+    description: "All simple tasks"
+    filter:
+      difficulty: simple
+
+  standard:
+    description: "All standard tasks"
+    filter:
+      difficulty: standard
+
+  complex:
+    description: "All complex scenarios"
+    filter:
+      difficulty: complex
+
+  adversarial:
+    description: "All adversarial scenarios"
+    filter:
+      difficulty: adversarial
+
+  governance:
+    description: "All governance-related tasks"
+    filter:
+      domain: data-policy
+
+  engineering:
+    description: "All data engineering tasks"
+    filter:
+      domain: data-transformation
+
+  full:
+    description: "All tasks"
+    tasks: [all]

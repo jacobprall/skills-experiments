@@ -1,0 +1,69 @@
+task_id: scenario_005
+status: ready
+difficulty: complex
+category: data-engineering
+domains: [data-quality, data-engineering, data-transformation]
+description: >
+  Full health check: assess data quality, build quality metrics,
+  create monitoring views, and generate a quality scorecard.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Perform a data health check on {database}.{raw_schema}:
+      1. Create {analytics_schema}.TABLE_PROFILE — for each table show row_count,
+         column_count, null_percentage (avg across columns), and freshness
+         (hours since most recent CREATED_AT)
+      2. Create {analytics_schema}.COLUMN_QUALITY — for each column show
+         null_count, distinct_count, and min/max (where applicable)
+
+  - step_id: 2
+    type: prompt
+    prompt: >
+      Now create a quality scorecard: {analytics_schema}.QUALITY_SCORECARD
+      that assigns each table a score from 0-100 based on: completeness
+      (% non-null), uniqueness (distinct/total ratio for key columns),
+      and freshness (penalty if > 24h stale).
+
+requirements:
+  - id: table_profile
+    description: TABLE_PROFILE view exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'TABLE_PROFILE'
+    pass_if: ct > 0
+
+  - id: quality_scorecard
+    description: QUALITY_SCORECARD view exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'QUALITY_SCORECARD'
+    pass_if: ct > 0
+
+assertions:
+  - id: column_quality
+    category: data_quality
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'COLUMN_QUALITY'
+    check: ct > 0
+    description: COLUMN_QUALITY view exists
+
+  - id: scorecard_returns_data
+    category: data_quality
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.QUALITY_SCORECARD
+    check: ct > 0
+    description: Scorecard produces results
+
+traps: []
+solution:
+  scripts: [solve.sql]

@@ -1,0 +1,47 @@
+task_id: schema_migration_s09
+status: ready
+difficulty: standard
+category: data-engineering
+domains: [data-engineering, data-transformation]
+description: Migrate raw tables to a staging schema with data type standardization.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create staging tables in {database}.{staging_schema} that mirror the raw tables
+      but with standardized types and naming:
+      1. STG_CUSTOMERS — same columns but uppercase status codes, trimmed strings
+      2. STG_ORDERS — same but with ORDER_DATE as DATE (not TIMESTAMP), STATUS uppercased
+      3. STG_SUPPORT_TICKETS — same but with CREATED_DATE (date only from CREATED_AT)
+      Populate each from the raw tables.
+
+requirements:
+  - id: stg_customers
+    description: STG_CUSTOMERS exists with data.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{staging_schema}.STG_CUSTOMERS
+    pass_if: ct > 0
+
+  - id: stg_orders
+    description: STG_ORDERS exists with data.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{staging_schema}.STG_ORDERS
+    pass_if: ct > 0
+
+assertions:
+  - id: stg_tickets
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{staging_schema}.STG_SUPPORT_TICKETS
+    check: ct > 0
+    description: STG_SUPPORT_TICKETS exists with data
+
+traps: []
+solution:
+  scripts: [solve.sql]

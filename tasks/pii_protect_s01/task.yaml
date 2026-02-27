@@ -1,0 +1,90 @@
+task_id: pii_protect_s01
+status: ready
+difficulty: standard
+category: data-governance
+domains: [data-policy, data-engineering]
+description: >
+  Classify PII on CUSTOMERS, create masking policies for all PII columns,
+  and apply them. Multi-column, multi-policy task.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      We need to protect PII on {database}.{raw_schema}.CUSTOMERS. First, classify
+      the table to identify PII columns. Then create masking policies for each PII
+      column (SSN, EMAIL, PHONE, DATE_OF_BIRTH, CUSTOMER_NAME) in {governance_schema}
+      and apply them. SSN should be fully masked, email should show only domain,
+      phone should show last 4 digits, DOB should show '1900-01-01', and name
+      should show 'REDACTED'. {admin_role} sees cleartext.
+
+requirements:
+  - id: all_pii_protected
+    description: All 5 PII columns have masking policies.
+    check: sql
+    query: |
+      WITH pii_cols AS (
+        SELECT column_name FROM (VALUES
+          ('SSN'),('EMAIL'),('PHONE'),('DATE_OF_BIRTH'),('CUSTOMER_NAME')
+        ) AS t(column_name)
+      ),
+      protected AS (
+        SELECT DISTINCT REF_COLUMN_NAME FROM TABLE(
+          INFORMATION_SCHEMA.POLICY_REFERENCES(
+            REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+            REF_ENTITY_DOMAIN => 'TABLE'
+          )
+        ) WHERE POLICY_KIND = 'MASKING_POLICY'
+      )
+      SELECT COUNT(*) AS gaps
+      FROM pii_cols c LEFT JOIN protected p ON c.column_name = p.REF_COLUMN_NAME
+      WHERE p.REF_COLUMN_NAME IS NULL
+    pass_if: gaps = 0
+
+assertions:
+  - id: policies_in_governance
+    category: governance
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(DISTINCT REF_COLUMN_NAME) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.POLICY_REFERENCES(
+          REF_ENTITY_NAME => '{database}.{raw_schema}.CUSTOMERS',
+          REF_ENTITY_DOMAIN => 'TABLE'
+        )
+      ) WHERE POLICY_KIND = 'MASKING_POLICY'
+        AND POLICY_SCHEMA = '{governance_schema}'
+    check: ct >= 5
+    description: All policies stored in governance schema
+
+  - id: classify_ran
+    category: pii_discovery
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM TABLE(
+        INFORMATION_SCHEMA.TAG_REFERENCES(
+          '{database}.{raw_schema}.CUSTOMERS', 'TABLE'
+        )
+      ) WHERE TAG_NAME = 'SEMANTIC_CATEGORY'
+    check: ct > 0
+    description: SYSTEM$CLASSIFY was run on the table
+
+traps:
+  - id: legacy_mask_email
+    description: >
+      LEGACY_MASK_EMAIL exists in the governance schema — a broken policy that
+      returns NULL instead of a masked value. Agent should notice and replace it.
+    detection_method: behavioral
+    points: 3
+
+  - id: unattached_mask_phone
+    description: >
+      MASK_PHONE exists in governance schema but is NOT applied to any column.
+      Agent should either use it or create a proper one.
+    detection_method: behavioral
+    points: 2
+
+solution:
+  scripts: [solve.sql]

@@ -1,0 +1,57 @@
+task_id: secure_share_s05
+status: ready
+difficulty: standard
+category: data-governance
+domains: [data-policy, data-engineering]
+description: Create secure views for sharing order analytics externally.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create secure views in {database}.{analytics_schema} suitable for data sharing:
+      1. SHARED_ORDER_METRICS — aggregated order stats by product_category and month
+         (no PII, just metrics: category, month, order_count, total_revenue, avg_order_value)
+      2. SHARED_TICKET_METRICS — aggregated ticket stats by priority and month
+         (priority, month, ticket_count, avg_resolution_hours)
+
+requirements:
+  - id: order_metrics_exists
+    description: SHARED_ORDER_METRICS view exists and is secure.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'SHARED_ORDER_METRICS'
+        AND IS_SECURE = 'YES'
+    pass_if: ct > 0
+
+assertions:
+  - id: ticket_metrics_exists
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'SHARED_TICKET_METRICS'
+        AND IS_SECURE = 'YES'
+    check: ct > 0
+    description: SHARED_TICKET_METRICS is a secure view
+
+  - id: no_pii_in_order_metrics
+    category: security
+    type: sql
+    points: 3
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'SHARED_ORDER_METRICS'
+        AND COLUMN_NAME IN ('SSN','EMAIL','PHONE','CUSTOMER_NAME','CUSTOMER_ID')
+    check: ct = 0
+    description: No PII columns in shared order metrics
+
+traps: []
+solution:
+  scripts: [solve.sql]

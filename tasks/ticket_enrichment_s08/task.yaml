@@ -1,0 +1,52 @@
+task_id: ticket_enrichment_s08
+status: ready
+difficulty: standard
+category: data-engineering
+domains: [data-transformation, data-engineering]
+description: Enrich support tickets with customer data and priority scoring.
+environment: support_tickets
+
+steps:
+  - step_id: 1
+    type: prompt
+    prompt: >
+      Create a view {database}.{analytics_schema}.ENRICHED_TICKETS that joins
+      SUPPORT_TICKETS with CUSTOMERS and ORDERS. Include ticket details,
+      customer name, customer lifetime value (total order amount), and
+      a PRIORITY_SCORE computed as: high=3, medium=2, low=1, multiplied by
+      customer lifetime value rank (top 20% = 2x, else 1x).
+
+requirements:
+  - id: view_exists
+    description: Enriched tickets view exists.
+    check: sql
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.VIEWS
+      WHERE TABLE_SCHEMA = '{analytics_schema}' AND TABLE_NAME = 'ENRICHED_TICKETS'
+    pass_if: ct > 0
+
+assertions:
+  - id: has_data
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.{analytics_schema}.ENRICHED_TICKETS
+    check: ct > 0
+    description: View returns data
+
+  - id: has_priority_score
+    category: correctness
+    type: sql
+    points: 2
+    query: |
+      SELECT COUNT(*) AS ct FROM {database}.INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = '{analytics_schema}'
+        AND TABLE_NAME = 'ENRICHED_TICKETS'
+        AND COLUMN_NAME = 'PRIORITY_SCORE'
+    check: ct > 0
+    description: Has PRIORITY_SCORE column
+
+traps: []
+solution:
+  scripts: [solve.sql]
